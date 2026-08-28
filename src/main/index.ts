@@ -12,6 +12,8 @@ import { health, streamChatCompletion, LlmError } from '../shared/llm/provider'
 import { loadMemory, loadSettings, saveMemory, saveSettings, toPublicSettings } from './store'
 import { PlaintextKeyRefused } from '../shared/secrets'
 import { cancelTtsQueue, enqueueSynthesize, ttsAvailable } from './tts'
+import { canSpeak, consumeGreeting, createVoiceGate, unlock } from '../shared/audio/voiceGate'
+import { isHabitatRequestAllowed } from '../shared/security/habitatRequest'
 
 let overlay: BrowserWindow | null = null
 let settingsWin: BrowserWindow | null = null
@@ -21,7 +23,8 @@ let memory: OperatorMemory = { ...DEFAULT_MEMORY, likes: [], dislikes: [], notes
 let history: ChatMessage[] = []
 let abort: AbortController | null = null
 let interactive = false
-
+let pendingGreeting = ''
+const voiceGate = createVoiceGate()
 
 let habitatPinned = false
 
@@ -41,30 +44,11 @@ function pinHabitatSession(): Session {
   habitatPinned = true
   ses.setPermissionRequestHandler((_wc, _permission, callback) => callback(false))
   ses.webRequest.onBeforeRequest((details, callback) => {
-    const url = details.url
-    if (
-      url.startsWith('file:') ||
-      url.startsWith('devtools:') ||
-      url.startsWith('blob:') ||
-      url.startsWith('data:')
-    ) {
-      callback({})
-      return
-    }
-    const dev = process.env.ELECTRON_RENDERER_URL
-    if (dev) {
-      const origin = dev.replace(/\/$/, '')
-      if (url.startsWith(origin) || url.startsWith(origin.replace('http://', 'ws://'))) {
-        callback({})
-        return
-      }
-    }
-    const vocalizer = vocalizerOrigin()
-    if (vocalizer && (url.startsWith(vocalizer) || url.startsWith(vocalizer.replace('https://', 'wss://').replace('http://', 'ws://')))) {
-      callback({})
-      return
-    }
-    callback({ cancel: true })
+    const allowed = isHabitatRequestAllowed(details.url, {
+      devOrigin: process.env.ELECTRON_RENDERER_URL,
+      vocalizerOrigin: vocalizerOrigin()
+    })
+    callback(allowed ? {} : { cancel: true })
   })
   return ses
 }
@@ -107,10 +91,20 @@ function setClickThrough(ignore: boolean): void {
   else overlay.setIgnoreMouseEvents(false)
 }
 
+function speakGreetingIfDue(): void {
+  if (!pendingGreeting) return
+  if (!consumeGreeting(voiceGate)) return
+  speak(pendingGreeting)
+}
+
 function setInteractive(next: boolean): void {
   interactive = next
   setClickThrough(settings.clickThroughIdle && !interactive)
   sendOverlay('ordis:interactive', interactive)
+  if (next) {
+    unlock(voiceGate)
+    speakGreetingIfDue()
+  }
 }
 
 function persist(): void {
@@ -119,7 +113,7 @@ function persist(): void {
 }
 
 function speak(text: string): void {
-  if (!settings.voiceOutEnabled || !ttsAvailable()) return
+  if (!canSpeak(voiceGate) || !settings.voiceOutEnabled || !ttsAvailable()) return
   const trimmed = text.trim()
   if (!trimmed) return
   void enqueueSynthesize(trimmed).then((result) => {
@@ -330,11 +324,12 @@ function registerIpc(): void {
   ipcMain.handle('overlay:open-settings', () => openSettings())
   ipcMain.handle('overlay:ready', () => {
     const greetingText = greeting()
+    pendingGreeting = greetingText
     sendOverlay('ordis:greeting', greetingText)
     sendOverlay('ordis:status', 'idle')
     sendOverlay('ordis:interactive', interactive)
     sendOverlay('ordis:captions', settings.captionsEnabled)
-    speak(greetingText)
+    speakGreetingIfDue()
   })
   ipcMain.handle('app:quit', () => app.quit())
 }
