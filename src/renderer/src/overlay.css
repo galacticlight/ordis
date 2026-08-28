@@ -122,6 +122,7 @@ body.interactive .caption:not([hidden]) {
   display: block;
 }
 body.idle .chat,
-body.idle .chrome {
+body.idle .chrome,
+body.idle .caption {
   display: none;
 }

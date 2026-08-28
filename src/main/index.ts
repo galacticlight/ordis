@@ -13,7 +13,7 @@ import { loadMemory, loadSettings, saveMemory, saveSettings, toPublicSettings } 
 import { PlaintextKeyRefused } from '../shared/secrets'
 import { cancelTtsQueue, enqueueSynthesize, ttsAvailable } from './tts'
 import { canSpeak, consumeGreeting, createVoiceGate, unlock } from '../shared/audio/voiceGate'
-import { isHabitatRequestAllowed, overlayContentSecurityPolicy } from '../shared/security/habitatRequest'
+import { isHabitatRequestAllowed, overlayContentSecurityPolicy, type HabitatAllowOrigins } from '../shared/security/habitatRequest'
 
 let overlay: BrowserWindow | null = null
 let settingsWin: BrowserWindow | null = null
@@ -36,6 +36,13 @@ function vocalizerOrigin(): string | null {
   }
 }
 
+function habitatAllowOrigins(): HabitatAllowOrigins {
+  return {
+    devOrigin: process.env.ELECTRON_RENDERER_URL || null,
+    vocalizerOrigin: vocalizerOrigin()
+  }
+}
+
 function pinHabitatSession(): Session {
   const ses = session.fromPartition('persist:ordis-habitat')
   if (habitatPinned) {
@@ -44,17 +51,11 @@ function pinHabitatSession(): Session {
   habitatPinned = true
   ses.setPermissionRequestHandler((_wc, _permission, callback) => callback(false))
   ses.webRequest.onBeforeRequest((details, callback) => {
-    const allowed = isHabitatRequestAllowed(details.url, {
-      devOrigin: process.env.ELECTRON_RENDERER_URL,
-      vocalizerOrigin: vocalizerOrigin()
-    })
+    const allowed = isHabitatRequestAllowed(details.url, habitatAllowOrigins())
     callback(allowed ? {} : { cancel: true })
   })
   ses.webRequest.onHeadersReceived((details, callback) => {
-    const csp = overlayContentSecurityPolicy({
-      devOrigin: process.env.ELECTRON_RENDERER_URL,
-      vocalizerOrigin: vocalizerOrigin()
-    })
+    const csp = overlayContentSecurityPolicy(habitatAllowOrigins())
     callback({
       responseHeaders: {
         ...details.responseHeaders,

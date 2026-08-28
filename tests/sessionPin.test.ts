@@ -64,6 +64,9 @@ describe('overlay CSP', () => {
     const main = readFileSync(join(process.cwd(), 'src/main/index.ts'), 'utf8')
     expect(main).toContain('overlayContentSecurityPolicy')
     expect(main).toContain('onHeadersReceived')
+    expect(main).toContain('habitatAllowOrigins')
+    expect(main).toMatch(/devOrigin:\s*process\.env\.ELECTRON_RENDERER_URL/)
+    expect(main).not.toMatch(/http:\/\/localhost:\*/)
   })
 })
 
