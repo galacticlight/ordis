@@ -14,6 +14,7 @@ import { PlaintextKeyRefused } from '../shared/secrets'
 import { cancelTtsQueue, enqueueSynthesize, ttsAvailable } from './tts'
 import { canSpeak, consumeGreeting, createVoiceGate, unlock } from '../shared/audio/voiceGate'
 import { isHabitatRequestAllowed, overlayContentSecurityPolicy, type HabitatAllowOrigins } from '../shared/security/habitatRequest'
+import { isOverHit, isOverWindow } from '../shared/overlay/hitTest'
 
 let overlay: BrowserWindow | null = null
 let settingsWin: BrowserWindow | null = null
@@ -24,6 +25,8 @@ let history: ChatMessage[] = []
 let abort: AbortController | null = null
 let interactive = false
 let hitHover = false
+let hoverArmed = true
+let cursorPoll: ReturnType<typeof setInterval> | null = null
 let pendingGreeting = ''
 const voiceGate = createVoiceGate()
 
@@ -116,6 +119,7 @@ function speakGreetingIfDue(): void {
 }
 
 function setInteractive(next: boolean): void {
+  if (interactive && !next) hoverArmed = false
   interactive = next
   if (next) hitHover = false
   applyClickThrough()
@@ -128,6 +132,40 @@ function setInteractive(next: boolean): void {
       overlay.webContents.focus()
     }
   }
+}
+
+
+function pollCursor(): void {
+  if (!overlay || overlay.isDestroyed()) return
+  const point = screen.getCursorScreenPoint()
+  const bounds = overlay.getBounds()
+  if (!isOverWindow(point.x, point.y, bounds)) {
+    hoverArmed = true
+    if (hitHover) {
+      hitHover = false
+      applyClickThrough()
+    }
+    return
+  }
+  const over = isOverHit(point.x - bounds.x, point.y - bounds.y, bounds.width, bounds.height)
+  if (over !== hitHover) {
+    hitHover = over
+    applyClickThrough()
+  }
+  if (over && hoverArmed && !interactive) {
+    setInteractive(true)
+  }
+}
+
+function startCursorPoll(): void {
+  if (cursorPoll !== null) return
+  cursorPoll = setInterval(pollCursor, 80)
+}
+
+function stopCursorPoll(): void {
+  if (cursorPoll === null) return
+  clearInterval(cursorPoll)
+  cursorPoll = null
 }
 
 function persist(): void {
@@ -380,6 +418,7 @@ if (!gotLock) {
     registerIpc()
     Menu.setApplicationMenu(null)
     overlay = createOverlay()
+    startCursorPoll()
     settingsWin = createSettings()
     tray = new Tray(trayIcon())
     tray.setToolTip('Ordis')
@@ -402,6 +441,7 @@ if (!gotLock) {
   })
 
   app.on('before-quit', () => {
+    stopCursorPoll()
     persist()
     if (settingsWin && !settingsWin.isDestroyed()) {
       settingsWin.removeAllListeners('close')
