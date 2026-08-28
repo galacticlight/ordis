@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { parseSseLine } from '@shared/llm/openaiCompatible'
+import { tokenizeForStream } from '@shared/llm/tokenize'
 
 describe('OpenAI-compatible SSE parser', () => {
   it('extracts delta content and treats [DONE] as a sentinel', () => {
@@ -13,8 +14,6 @@ describe('OpenAI-compatible SSE parser', () => {
     expect(parseSseLine('data: not-json')).toBeNull()
   })
 })
-
-import { tokenizeForStream } from '@shared/llm/tokenize'
 
 describe('tokenizeForStream', () => {
   it('keeps words so streaming stays live', () => {

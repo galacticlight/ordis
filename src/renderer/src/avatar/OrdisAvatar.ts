@@ -123,7 +123,7 @@ export class OrdisAvatar {
   private disposed = false
 
   constructor(canvas: HTMLCanvasElement) {
-    this.renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true })
+    this.renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true, powerPreference: 'low-power' })
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
     this.renderer.setClearColor(0x000000, 0)
     this.renderer.setSize(canvas.clientWidth || 360, canvas.clientHeight || 420, false)
