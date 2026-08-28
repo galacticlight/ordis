@@ -19,14 +19,17 @@ body,
 #app {
   position: relative;
   display: grid;
-  grid-template-rows: 1fr auto auto;
+  grid-template-rows: minmax(0, 1fr) auto auto;
   grid-template-columns: 1fr;
+  min-height: 0;
 }
 #avatar {
   grid-row: 1;
   width: 100%;
-  height: 100%;
+  height: auto;
   min-height: 0;
+  max-height: 100%;
+  align-self: stretch;
   display: block;
   pointer-events: none;
 }
@@ -35,8 +38,9 @@ body,
   left: 16%;
   top: 4%;
   width: 58%;
-  height: 58%;
-  background: rgba(8, 12, 24, 0.03);
+  height: 52%;
+  z-index: 1;
+  background: rgba(8, 12, 24, 0.04);
   cursor: pointer;
   pointer-events: auto;
   -webkit-app-region: no-drag;
@@ -75,6 +79,8 @@ body.interactive .hit {
   margin: 0 14px 14px;
   display: none;
   gap: 6px;
+  min-height: 52px;
+  flex-shrink: 0;
   -webkit-app-region: no-drag;
 }
 .chat input {

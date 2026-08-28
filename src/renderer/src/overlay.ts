@@ -116,6 +116,7 @@ function setCaption(text: string): void {
 
 function wake(): void {
   void resumePlayback()
+  if (document.body.classList.contains('interactive')) return
   setInteractiveUi(true)
   void window.ordis.setInteractive(true)
 }
@@ -125,8 +126,15 @@ new ResizeObserver(resize).observe(canvas)
 resize()
 hit.addEventListener('mouseenter', wake)
 hit.addEventListener('click', wake)
+hit.addEventListener('mousemove', wake)
 caption.addEventListener('mouseenter', wake)
 caption.addEventListener('click', wake)
+window.addEventListener('mousemove', (event) => {
+  const x = event.clientX
+  const y = event.clientY
+  const box = hit.getBoundingClientRect()
+  if (x >= box.left && x <= box.right && y >= box.top && y <= box.bottom) wake()
+})
 form.addEventListener('submit', (event) => {
   event.preventDefault()
   const text = promptInput.value.trim()
