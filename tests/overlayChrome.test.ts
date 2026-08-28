@@ -24,8 +24,11 @@ describe('overlay chrome on wake', () => {
   it('wakes from hit, tray Interact, and Ctrl+Shift+O without Settings unlocking TTS', () => {
     const overlay = readFileSync(join(root, 'src/renderer/src/overlay.ts'), 'utf8')
     const main = readFileSync(join(root, 'src/main/index.ts'), 'utf8')
-    expect(overlay).toMatch(/hit\.addEventListener\('mouseenter',\s*wake\)/)
-    expect(overlay).toMatch(/hit\.addEventListener\('click',\s*wake\)/)
+    expect(overlay).toMatch(/hit\.addEventListener\('mouseenter'/) 
+    expect(overlay).toMatch(/hit\.addEventListener\('click'/)
+    expect(overlay).toContain('hoverArmed')
+    expect(overlay).toContain("pointerleave")
+    expect(main).toContain('overlay:hit-hover')
     expect(main).toMatch(/label: 'Interact',\s*click: \(\) => setInteractive\(true\)/)
     expect(main).toMatch(/CommandOrControl\+Shift\+O',\s*\(\) => setInteractive\(!interactive\)/)
     const open = main.match(/function openSettings\(\): void \{[\s\S]*?\n\}/)?.[0]
@@ -38,11 +41,14 @@ describe('overlay chrome on wake', () => {
 })
 
 describe('settings checkboxes', () => {
-  it('resets checkbox appearance so the checked state can paint', () => {
+  it('paints a gold mark when checked, independent of native appearance', () => {
     const css = readFileSync(join(root, 'src/renderer/src/settings.css'), 'utf8')
+    const html = readFileSync(join(root, 'src/renderer/settings.html'), 'utf8')
     expect(css).toMatch(/input:not\(\[type="checkbox"\]\)/)
-    expect(css).not.toMatch(/^input,\s*select\s*\{/m)
-    expect(css).toMatch(/-webkit-appearance:\s*checkbox/)
-    expect(css).toMatch(/input\[type="checkbox"\][\s\S]*appearance:\s*auto/)
+    expect(css).toMatch(/-webkit-appearance:\s*none/)
+    expect(css).toMatch(/input\[type="checkbox"\]:checked::after/)
+    expect(html).toMatch(/id="alwaysOnTop"[^>]*checked/)
+    expect(html).toMatch(/id="captionsEnabled"[^>]*checked/)
+    expect(html).toMatch(/id="voiceOutEnabled"[^>]*checked/)
   })
 })

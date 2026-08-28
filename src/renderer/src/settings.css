@@ -14,15 +14,26 @@ button { background:var(--gold); color:var(--ink); border:none; border-radius:8p
 .ghost { background:transparent; color:var(--gold); border:1px solid var(--gold); }
 
 input[type="checkbox"] {
-  -webkit-appearance: checkbox;
-  appearance: auto;
+  -webkit-appearance: none;
+  appearance: none;
   width: 1.1em;
   height: 1.1em;
   margin: 0;
   padding: 0;
   flex: none;
-  background: none;
-  border: none;
-  border-radius: 0;
-  accent-color: var(--gold);
+  background: #1c1a28;
+  border: 1px solid var(--gold);
+  border-radius: 3px;
+  display: inline-grid;
+  place-content: center;
+}
+input[type="checkbox"]::after {
+  content: "";
+  width: 0.55em;
+  height: 0.55em;
+  background: var(--gold);
+  transform: scale(0);
+}
+input[type="checkbox"]:checked::after {
+  transform: scale(1);
 }

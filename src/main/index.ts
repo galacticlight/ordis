@@ -23,6 +23,7 @@ let memory: OperatorMemory = { ...DEFAULT_MEMORY, likes: [], dislikes: [], notes
 let history: ChatMessage[] = []
 let abort: AbortController | null = null
 let interactive = false
+let hitHover = false
 let pendingGreeting = ''
 const voiceGate = createVoiceGate()
 
@@ -104,6 +105,10 @@ function setClickThrough(ignore: boolean): void {
   else overlay.setIgnoreMouseEvents(false)
 }
 
+function applyClickThrough(): void {
+  setClickThrough(settings.clickThroughIdle && !interactive && !hitHover)
+}
+
 function speakGreetingIfDue(): void {
   if (!pendingGreeting) return
   if (!consumeGreeting(voiceGate)) return
@@ -112,7 +117,8 @@ function speakGreetingIfDue(): void {
 
 function setInteractive(next: boolean): void {
   interactive = next
-  setClickThrough(settings.clickThroughIdle && !interactive)
+  if (next) hitHover = false
+  applyClickThrough()
   sendOverlay('ordis:interactive', interactive)
   if (next) {
     unlock(voiceGate)
@@ -338,6 +344,10 @@ function registerIpc(): void {
     await runChat(String(text ?? ''))
   })
   ipcMain.handle('overlay:set-interactive', (_e, next: boolean) => setInteractive(Boolean(next)))
+  ipcMain.handle('overlay:hit-hover', (_e, over: boolean) => {
+    hitHover = Boolean(over)
+    applyClickThrough()
+  })
   ipcMain.handle('overlay:open-settings', () => openSettings())
   ipcMain.handle('overlay:ready', () => {
     const greetingText = greeting()

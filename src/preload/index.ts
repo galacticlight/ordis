@@ -7,6 +7,7 @@ export interface OrdisBridge {
   testConnection: () => Promise<{ ok: boolean; error?: string }>
   sendChat: (text: string) => Promise<void>
   setInteractive: (next: boolean) => Promise<void>
+  setHitHover: (over: boolean) => Promise<void>
   openSettings: () => Promise<void>
   ready: () => Promise<void>
   quit: () => Promise<void>
@@ -30,6 +31,7 @@ const bridge: OrdisBridge = {
   testConnection: () => ipcRenderer.invoke('settings:test'),
   sendChat: (text) => ipcRenderer.invoke('chat:send', text),
   setInteractive: (next) => ipcRenderer.invoke('overlay:set-interactive', next),
+  setHitHover: (over) => ipcRenderer.invoke('overlay:hit-hover', over),
   openSettings: () => ipcRenderer.invoke('overlay:open-settings'),
   ready: () => ipcRenderer.invoke('overlay:ready'),
   quit: () => ipcRenderer.invoke('app:quit'),

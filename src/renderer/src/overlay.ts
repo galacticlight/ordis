@@ -114,26 +114,51 @@ function setCaption(text: string): void {
   caption.textContent = text
 }
 
-function wake(): void {
+let hoverArmed = true
+let lastHitHover: boolean | null = null
+
+function pointInHit(x: number, y: number): boolean {
+  const box = hit.getBoundingClientRect()
+  return x >= box.left && x <= box.right && y >= box.top && y <= box.bottom
+}
+
+function reportHitHover(over: boolean): void {
+  if (lastHitHover === over) return
+  lastHitHover = over
+  void window.ordis.setHitHover(over)
+}
+
+function wake(fromHover = false): void {
   void resumePlayback()
+  if (fromHover && !hoverArmed) return
   if (document.body.classList.contains('interactive')) return
   setInteractiveUi(true)
   void window.ordis.setInteractive(true)
 }
 
+function tuck(): void {
+  hoverArmed = false
+  reportHitHover(false)
+  setInteractiveUi(false)
+  void window.ordis.setInteractive(false)
+}
+
 window.addEventListener('resize', resize)
 new ResizeObserver(resize).observe(canvas)
 resize()
-hit.addEventListener('mouseenter', wake)
-hit.addEventListener('click', wake)
-hit.addEventListener('mousemove', wake)
-caption.addEventListener('mouseenter', wake)
-caption.addEventListener('click', wake)
+hit.addEventListener('mouseenter', () => wake(true))
+hit.addEventListener('click', () => wake(false))
+hit.addEventListener('mousemove', () => wake(true))
+caption.addEventListener('mouseenter', () => wake(true))
+caption.addEventListener('click', () => wake(false))
 window.addEventListener('mousemove', (event) => {
-  const x = event.clientX
-  const y = event.clientY
-  const box = hit.getBoundingClientRect()
-  if (x >= box.left && x <= box.right && y >= box.top && y <= box.bottom) wake()
+  const over = pointInHit(event.clientX, event.clientY)
+  reportHitHover(over)
+  if (over) wake(true)
+})
+document.documentElement.addEventListener('pointerleave', () => {
+  hoverArmed = true
+  reportHitHover(false)
 })
 form.addEventListener('submit', (event) => {
   event.preventDefault()
@@ -149,8 +174,7 @@ btnSettings.addEventListener('click', () => {
   void window.ordis.openSettings()
 })
 btnTuck.addEventListener('click', () => {
-  setInteractiveUi(false)
-  void window.ordis.setInteractive(false)
+  tuck()
 })
 window.ordis.onChunk((chunk) => {
   if (chunk.type === 'token') {
