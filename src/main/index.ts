@@ -1,4 +1,4 @@
-import { app, BrowserWindow, globalShortcut, ipcMain, Menu, nativeImage, Tray, screen, shell, type NativeImage } from 'electron'
+import { app, BrowserWindow, globalShortcut, ipcMain, Menu, nativeImage, session, Tray, screen, shell, type NativeImage, type Session } from 'electron'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -10,6 +10,7 @@ import { guardOutgoing } from '../shared/personality/traps'
 import { ingestOperatorUtterance } from '../shared/memory/operatorMemory'
 import { health, streamChatCompletion, LlmError } from '../shared/llm/provider'
 import { loadMemory, loadSettings, saveMemory, saveSettings, toPublicSettings } from './store'
+import { PlaintextKeyRefused } from '../shared/secrets'
 
 let overlay: BrowserWindow | null = null
 let settingsWin: BrowserWindow | null = null
@@ -19,6 +20,53 @@ let memory: OperatorMemory = { ...DEFAULT_MEMORY, likes: [], dislikes: [], notes
 let history: ChatMessage[] = []
 let abort: AbortController | null = null
 let interactive = false
+
+
+let habitatPinned = false
+
+function vocalizerOrigin(): string | null {
+  try {
+    return new URL(settings.apiBaseUrl).origin
+  } catch {
+    return null
+  }
+}
+
+function pinHabitatSession(): Session {
+  const ses = session.fromPartition('persist:ordis-habitat')
+  if (habitatPinned) {
+    return ses
+  }
+  habitatPinned = true
+  ses.setPermissionRequestHandler((_wc, _permission, callback) => callback(false))
+  ses.webRequest.onBeforeRequest((details, callback) => {
+    const url = details.url
+    if (
+      url.startsWith('file:') ||
+      url.startsWith('devtools:') ||
+      url.startsWith('blob:') ||
+      url.startsWith('data:')
+    ) {
+      callback({})
+      return
+    }
+    const dev = process.env.ELECTRON_RENDERER_URL
+    if (dev) {
+      const origin = dev.replace(/\/$/, '')
+      if (url.startsWith(origin) || url.startsWith(origin.replace('http://', 'ws://'))) {
+        callback({})
+        return
+      }
+    }
+    const vocalizer = vocalizerOrigin()
+    if (vocalizer && (url.startsWith(vocalizer) || url.startsWith(vocalizer.replace('https://', 'wss://').replace('http://', 'ws://')))) {
+      callback({})
+      return
+    }
+    callback({ cancel: true })
+  })
+  return ses
+}
 
 function isDev(): boolean {
   return Boolean(process.env.ELECTRON_RENDERER_URL)
@@ -70,6 +118,7 @@ function persist(): void {
 }
 
 function createOverlay(): BrowserWindow {
+  pinHabitatSession()
   const display = screen.getPrimaryDisplay().workArea
   const width = 380
   const height = 560
@@ -91,6 +140,7 @@ function createOverlay(): BrowserWindow {
     show: false,
     webPreferences: {
       preload: preloadPath(),
+      partition: 'persist:ordis-habitat',
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
@@ -122,6 +172,7 @@ function createSettings(): BrowserWindow {
     backgroundColor: '#14121c',
     webPreferences: {
       preload: preloadPath(),
+      partition: 'persist:ordis-habitat',
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
@@ -215,11 +266,21 @@ function registerIpc(): void {
     if (typeof patch.clickThroughIdle === 'boolean') next.clickThroughIdle = patch.clickThroughIdle
     if (typeof patch.captionsEnabled === 'boolean') next.captionsEnabled = patch.captionsEnabled
     if (typeof patch.chatterFrequency === 'number') next.chatterFrequency = patch.chatterFrequency
-    if (typeof patch.voiceInEnabled === 'boolean') next.voiceInEnabled = patch.voiceInEnabled
-    if (typeof patch.voiceOutEnabled === 'boolean') next.voiceOutEnabled = patch.voiceOutEnabled
+    next.voiceInEnabled = false
+    next.voiceOutEnabled = false
     if (typeof patch.apiKey === 'string' && patch.apiKey.trim()) next.apiKey = patch.apiKey.trim()
-    settings = next
-    persist()
+    const previous = settings
+    try {
+      settings = next
+      persist()
+    } catch (error) {
+      settings = { ...next, apiKey: previous.apiKey }
+      saveSettings(settings)
+      if (error instanceof PlaintextKeyRefused) {
+        throw error
+      }
+      throw error
+    }
     overlay?.setAlwaysOnTop(settings.alwaysOnTop, 'screen-saver')
     setInteractive(interactive)
     sendOverlay('ordis:settings', toPublicSettings(settings))

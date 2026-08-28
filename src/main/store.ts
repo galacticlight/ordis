@@ -1,4 +1,5 @@
 import { app, safeStorage } from 'electron'
+import { packSecret, unpackSecret, type SecretBox } from '../shared/secrets'
 import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import {
@@ -27,27 +28,18 @@ function memoryFile(): string {
   return join(dir(), 'memory.json')
 }
 
-function encryptSecret(value: string): { enc?: string; plain?: string } {
-  if (!value) return {}
-  try {
-    if (safeStorage.isEncryptionAvailable()) {
-      return { enc: safeStorage.encryptString(value).toString('base64') }
-    }
-  } catch {
-    // fall through
+function electronSecretBox(): SecretBox {
+  return {
+    isAvailable: () => {
+      try {
+        return safeStorage.isEncryptionAvailable()
+      } catch {
+        return false
+      }
+    },
+    encrypt: (value: string) => safeStorage.encryptString(value).toString('base64'),
+    decrypt: (enc: string) => safeStorage.decryptString(Buffer.from(enc, 'base64'))
   }
-  return { plain: value }
-}
-
-function decryptSecret(disk: { enc?: string; plain?: string }): string {
-  if (disk.enc) {
-    try {
-      return safeStorage.decryptString(Buffer.from(disk.enc, 'base64'))
-    } catch {
-      return ''
-    }
-  }
-  return disk.plain ?? ''
 }
 
 export function loadSettings(): AppSettings {
@@ -70,19 +62,23 @@ export function loadSettings(): AppSettings {
     }
     if (existsSync(secretsFile())) {
       const secret = JSON.parse(readFileSync(secretsFile(), 'utf8')) as { enc?: string; plain?: string }
-      const key = decryptSecret(secret)
+      const key = unpackSecret(secret, electronSecretBox())
       if (key) base.apiKey = key
     }
   } catch {
     // keep defaults
   }
+  base.voiceInEnabled = false
+  base.voiceOutEnabled = false
   return base
 }
 
 export function saveSettings(next: AppSettings): void {
-  const { apiKey, ...publicBit } = next
+  const packed = packSecret(next.apiKey, electronSecretBox())
+  const publicBit = { ...next, apiKey: undefined, voiceInEnabled: false, voiceOutEnabled: false }
+  delete (publicBit as { apiKey?: string }).apiKey
   writeFileSync(settingsFile(), JSON.stringify(publicBit, null, 2), 'utf8')
-  writeFileSync(secretsFile(), JSON.stringify(encryptSecret(apiKey), null, 2), 'utf8')
+  writeFileSync(secretsFile(), JSON.stringify(packed, null, 2), 'utf8')
   try {
     chmodSync(secretsFile(), 0o600)
   } catch {
