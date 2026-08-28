@@ -24,7 +24,8 @@ let captionsEnabled = true
 let spoken = ''
 
 function resize(): void {
-  scene.resize(window.innerWidth, Math.max(320, window.innerHeight - 80))
+  const box = canvas.getBoundingClientRect()
+  scene.resize(Math.max(1, box.width), Math.max(1, box.height))
 }
 
 function setInteractiveUi(next: boolean): void {
@@ -50,6 +51,7 @@ function wake(): void {
 }
 
 window.addEventListener('resize', resize)
+new ResizeObserver(resize).observe(canvas)
 resize()
 hit.addEventListener('mouseenter', wake)
 hit.addEventListener('click', wake)

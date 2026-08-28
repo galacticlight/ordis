@@ -120,8 +120,8 @@ function persist(): void {
 function createOverlay(): BrowserWindow {
   pinHabitatSession()
   const display = screen.getPrimaryDisplay().workArea
-  const width = 380
-  const height = 560
+  const width = 420
+  const height = 640
   const win = new BrowserWindow({
     width,
     height,
