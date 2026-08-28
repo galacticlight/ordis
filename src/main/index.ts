@@ -2,7 +2,7 @@ import { app, BrowserWindow, globalShortcut, ipcMain, Menu, nativeImage, Tray, s
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import type { AppSettings, ChatMessage, PublicSettings, StreamChunk } from '../shared/types'
+import type { AppSettings, ChatMessage, PublicSettings } from '../shared/types'
 import { DEFAULT_MEMORY, DEFAULT_SETTINGS, type OperatorMemory } from '../shared/types'
 import { canonicalReply, composeMessages, greeting, newMessage, offlineReply, streamText } from '../shared/personality/engine'
 import { loadPersonalityPack } from '../shared/personality/pack'
@@ -156,7 +156,7 @@ async function runChat(text: string): Promise<void> {
   try {
     const canned = canonicalReply(trimmed)
     if (canned || !settings.apiKey.trim() || !settings.apiBaseUrl.trim()) {
-      full = canned ?? offlineReply(trimmed, config)
+      full = guardOutgoing(canned ?? offlineReply(trimmed, config))
       sendOverlay('ordis:status', 'speaking')
       for (const chunk of streamText(full)) sendOverlay('ordis:chunk', chunk)
     } else {
@@ -171,11 +171,9 @@ async function runChat(text: string): Promise<void> {
         signal: abort.signal
       })) {
         full += token
-        const chunk: StreamChunk = { type: 'token', value: token }
-        sendOverlay('ordis:chunk', chunk)
       }
       full = guardOutgoing(full)
-      sendOverlay('ordis:chunk', { type: 'done', value: full } satisfies StreamChunk)
+      for (const chunk of streamText(full)) sendOverlay('ordis:chunk', chunk)
     }
   } catch (error) {
     if (abort.signal.aborted) return

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { detectTraps, guardOutgoing, isClean, assertClean } from '@shared/personality/traps'
+import { streamText } from '@shared/personality/engine'
 import { spokenFixtureLines } from '@shared/personality/pack'
 import { NORTH_STAR } from '@shared/types'
 
@@ -51,5 +52,20 @@ describe('pack speech must stay clean', () => {
       assertClean(line, line.slice(0, 96))
       expect(isClean(line)).toBe(true)
     }
+  })
+})
+
+describe('captions never flash a trap', () => {
+  it('streamText only emits tokens after guardOutgoing', () => {
+    const dirty = 'Operator, the habitat is — TEAR THEM APART — tidy.'
+    const chunks = streamText(dirty)
+    expect(chunks.length).toBeGreaterThan(0)
+    for (const chunk of chunks) {
+      expect(isClean(chunk.value)).toBe(true)
+      expect(chunk.value).not.toMatch(/TEAR THEM APART/)
+    }
+    const done = chunks.at(-1)
+    expect(done?.type).toBe('done')
+    expect(done?.value).toBe(guardOutgoing(dirty))
   })
 })

@@ -86,10 +86,12 @@ export function shouldUseOffline(config: EngineConfig): boolean {
   return !looksLikeApiConfigured(config.apiKey, config.apiBaseUrl)
 }
 
+/** Tokenize only AFTER guardOutgoing so captions never flash a trap hit. */
 export function streamText(text: string): StreamChunk[] {
-  const tokens = tokenizeForStream(text)
+  const clean = guardOutgoing(text)
+  const tokens = tokenizeForStream(clean)
   const chunks: StreamChunk[] = tokens.map((value) => ({ type: 'token' as const, value }))
-  chunks.push({ type: 'done', value: text })
+  chunks.push({ type: 'done', value: clean })
   return chunks
 }
 
