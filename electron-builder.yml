@@ -14,8 +14,11 @@ linux:
   synopsis: Real-time desktop AI companion
 mac:
   target:
-    - dir
+    - target: dir
+      arch:
+        - arm64
   category: public.app-category.utilities
+  identity: null
 win:
   target:
     - dir
