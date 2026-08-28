@@ -216,6 +216,8 @@ function registerIpc(): void {
     if (typeof patch.clickThroughIdle === 'boolean') next.clickThroughIdle = patch.clickThroughIdle
     if (typeof patch.captionsEnabled === 'boolean') next.captionsEnabled = patch.captionsEnabled
     if (typeof patch.chatterFrequency === 'number') next.chatterFrequency = patch.chatterFrequency
+    if (typeof patch.voiceInEnabled === 'boolean') next.voiceInEnabled = patch.voiceInEnabled
+    if (typeof patch.voiceOutEnabled === 'boolean') next.voiceOutEnabled = patch.voiceOutEnabled
     if (typeof patch.apiKey === 'string' && patch.apiKey.trim()) next.apiKey = patch.apiKey.trim()
     settings = next
     persist()

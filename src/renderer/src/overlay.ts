@@ -2,14 +2,22 @@ import './overlay.css'
 import { OrdisAvatar } from './avatar/OrdisAvatar'
 import type { CompanionStatus } from '../../shared/types'
 
-const canvas = document.getElementById('avatar') as HTMLCanvasElement
-const caption = document.getElementById('caption') as HTMLDivElement
-const form = document.getElementById('chat') as HTMLFormElement
-const promptInput = document.getElementById('prompt') as HTMLInputElement
-const hit = document.getElementById('hit') as HTMLDivElement
-const chrome = document.getElementById('chrome') as HTMLDivElement
-const btnSettings = document.getElementById('btn-settings') as HTMLButtonElement
-const btnTuck = document.getElementById('btn-tuck') as HTMLButtonElement
+function must<T extends HTMLElement>(id: string): T {
+  const el = document.getElementById(id)
+  if (!el) {
+    throw new Error(`Missing #${id}`)
+  }
+  return el as T
+}
+
+const canvas = must<HTMLCanvasElement>('avatar')
+const caption = must<HTMLDivElement>('caption')
+const form = must<HTMLFormElement>('chat')
+const promptInput = must<HTMLInputElement>('prompt')
+const hit = must<HTMLDivElement>('hit')
+const chrome = must<HTMLDivElement>('chrome')
+const btnSettings = must<HTMLButtonElement>('btn-settings')
+const btnTuck = must<HTMLButtonElement>('btn-tuck')
 
 const scene = new OrdisAvatar(canvas)
 let captionsEnabled = true
@@ -37,14 +45,16 @@ function setCaption(text: string): void {
   caption.textContent = text
 }
 
+function wake(): void {
+  void window.ordis.setInteractive(true)
+}
+
 window.addEventListener('resize', resize)
 resize()
-hit.addEventListener('mouseenter', () => {
-  void window.ordis.setInteractive(true)
-})
-hit.addEventListener('click', () => {
-  void window.ordis.setInteractive(true)
-})
+hit.addEventListener('mouseenter', wake)
+hit.addEventListener('click', wake)
+caption.addEventListener('mouseenter', wake)
+caption.addEventListener('click', wake)
 form.addEventListener('submit', (event) => {
   event.preventDefault()
   const text = promptInput.value.trim()
@@ -87,5 +97,5 @@ window.ordis.onCaptions((enabled) => {
   captionsEnabled = enabled
   if (!enabled) caption.hidden = true
 })
-void window.ordis.ready()
 setInteractiveUi(false)
+void window.ordis.ready()
