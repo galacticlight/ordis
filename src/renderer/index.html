@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'self' data:; connect-src 'self' https: http://localhost:* ws://localhost:*; media-src 'self'"
+    />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Ordis</title>
+    <link rel="stylesheet" href="./src/styles.css" />
+  </head>
+  <body>
+    <div id="app" class="habitat">
+      <div class="chrome drag">
+        <span class="sigil">◈</span>
+        <span class="title">ORDIS</span>
+        <span id="status-pill" class="pill" data-status="idle">idle</span>
+        <div class="spacer"></div>
+        <button type="button" id="btn-tuck" class="icon-btn" title="Idle tuck">▴</button>
+        <button type="button" id="btn-settings" class="icon-btn" title="Settings">⚙</button>
+      </div>
+
+      <div class="stage">
+        <canvas id="cube" aria-label="Ordis avatar"></canvas>
+        <div id="caption" class="caption" aria-live="polite"></div>
+      </div>
+
+      <section id="chat-panel" class="panel">
+        <div id="log" class="log" role="log"></div>
+        <form id="composer" class="composer">
+          <button type="button" id="btn-mic" class="icon-btn" title="Voice in (stub)">
+            ●
+          </button>
+          <input
+            id="input"
+            type="text"
+            autocomplete="off"
+            placeholder="Speak, Operator…"
+            aria-label="Message to Ordis"
+          />
+          <button type="submit" class="send">Transmit</button>
+        </form>
+        <p class="hint">Text chat is live. Voice in/out is stubbed in Settings — the path is ready.</p>
+      </section>
+
+      <section id="settings-panel" class="panel settings hidden">
+        <h2>Cephalon link</h2>
+        <label>
+          Endpoint
+          <input id="set-url" type="url" placeholder="https://api.openai.com/v1" />
+        </label>
+        <label>
+          API key
+          <input id="set-key" type="password" placeholder="never stored in git" />
+        </label>
+        <label>
+          Model
+          <input id="set-model" type="text" placeholder="gpt-4o-mini" />
+        </label>
+        <label class="check">
+          <input id="set-glitch" type="checkbox" checked />
+          Allow Ordan bleed-through
+        </label>
+        <label>
+          Glitch chance
+          <input id="set-chance" type="range" min="0" max="50" value="18" />
+        </label>
+        <label class="check">
+          <input id="set-top" type="checkbox" checked />
+          Always on top
+        </label>
+        <label class="check">
+          <input id="set-voice-in" type="checkbox" />
+          Voice in (Web Speech stub)
+        </label>
+        <label class="check">
+          <input id="set-voice-out" type="checkbox" />
+          Voice out (speechSynthesis stub)
+        </label>
+        <button type="button" id="btn-save" class="send">Save precepts</button>
+        <p id="settings-note" class="hint"></p>
+      </section>
+    </div>
+    <script type="module" src="./src/main.ts"></script>
+  </body>
+</html>
