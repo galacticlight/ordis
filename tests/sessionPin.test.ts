@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { isHabitatRequestAllowed } from '@shared/security/habitatRequest'
+import { habitatConnectSrc, isHabitatRequestAllowed, overlayContentSecurityPolicy } from '@shared/security/habitatRequest'
 
 const openai = { vocalizerOrigin: 'https://api.openai.com', devOrigin: null }
 const vite = { vocalizerOrigin: null, devOrigin: 'http://localhost:5173' }
@@ -47,5 +47,22 @@ describe('overlay CSP', () => {
     expect(csp).toBeTruthy()
     expect(csp).not.toMatch(/connect-src[^;]*https:/)
     expect(csp).toContain("connect-src 'self'")
+  })
+})
+
+describe('habitatConnectSrc', () => {
+  it('empty endpoint adds no extra connect-src', () => {
+    expect(habitatConnectSrc({ devOrigin: null, vocalizerOrigin: null })).toEqual([])
+    const csp = overlayContentSecurityPolicy({ devOrigin: null, vocalizerOrigin: null })
+    expect(csp).toContain("connect-src 'self'")
+    expect(csp).not.toMatch(/connect-src[^;]*https:/)
+    expect(csp).not.toContain('http://localhost:*')
+  })
+
+  it('includes the exact vite-dev origin when set', () => {
+    const extra = habitatConnectSrc({ devOrigin: 'http://localhost:5173', vocalizerOrigin: null })
+    expect(extra).toContain('http://localhost:5173')
+    expect(extra).toContain('ws://localhost:5173')
+    expect(extra.some((v) => v.includes('*'))).toBe(false)
   })
 })

@@ -145,7 +145,7 @@ export class OrdisAvatar {
       if (obj.name.startsWith('eye-') && obj instanceof THREE.Mesh) this.eyes.push(obj)
     })
     this.glyph = createCubeGlyph()
-    this.glyph.position.set(0.58, -0.72, 0.45)
+    this.glyph.position.set(0.36, -0.58, 0.45)
     this.scene.add(this.glyph)
     this.loop = this.loop.bind(this)
     this.raf = requestAnimationFrame(this.loop)

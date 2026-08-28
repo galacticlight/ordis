@@ -13,7 +13,7 @@ import { loadMemory, loadSettings, saveMemory, saveSettings, toPublicSettings } 
 import { PlaintextKeyRefused } from '../shared/secrets'
 import { cancelTtsQueue, enqueueSynthesize, ttsAvailable } from './tts'
 import { canSpeak, consumeGreeting, createVoiceGate, unlock } from '../shared/audio/voiceGate'
-import { isHabitatRequestAllowed } from '../shared/security/habitatRequest'
+import { isHabitatRequestAllowed, overlayContentSecurityPolicy } from '../shared/security/habitatRequest'
 
 let overlay: BrowserWindow | null = null
 let settingsWin: BrowserWindow | null = null
@@ -49,6 +49,18 @@ function pinHabitatSession(): Session {
       vocalizerOrigin: vocalizerOrigin()
     })
     callback(allowed ? {} : { cancel: true })
+  })
+  ses.webRequest.onHeadersReceived((details, callback) => {
+    const csp = overlayContentSecurityPolicy({
+      devOrigin: process.env.ELECTRON_RENDERER_URL,
+      vocalizerOrigin: vocalizerOrigin()
+    })
+    callback({
+      responseHeaders: {
+        ...details.responseHeaders,
+        'Content-Security-Policy': [csp]
+      }
+    })
   })
   return ses
 }
@@ -104,6 +116,10 @@ function setInteractive(next: boolean): void {
   if (next) {
     unlock(voiceGate)
     speakGreetingIfDue()
+    if (overlay && !overlay.isDestroyed()) {
+      overlay.focus()
+      overlay.webContents.focus()
+    }
   }
 }
 

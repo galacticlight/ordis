@@ -94,9 +94,11 @@ function resize(): void {
 function setInteractiveUi(next: boolean): void {
   document.body.classList.toggle('interactive', next)
   document.body.classList.toggle('idle', !next)
-  form.hidden = !next
-  chrome.hidden = !next
-  if (next) promptInput.focus()
+  form.removeAttribute('hidden')
+  chrome.removeAttribute('hidden')
+  if (next) {
+    promptInput.focus({ preventScroll: true })
+  }
 }
 
 function setCaption(text: string): void {

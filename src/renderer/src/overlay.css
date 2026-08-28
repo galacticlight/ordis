@@ -107,7 +107,12 @@ body.interactive .chat {
   gap: 6px;
   -webkit-app-region: no-drag;
 }
-body.interactive .chrome {
+body.interactive .chrome,
+body.interactive .chrome[hidden] {
+  display: flex;
+}
+body.interactive .chat,
+body.interactive .chat[hidden] {
   display: flex;
 }
 body.idle .chat,
