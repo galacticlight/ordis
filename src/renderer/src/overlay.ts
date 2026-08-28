@@ -94,9 +94,12 @@ function resize(): void {
 function setInteractiveUi(next: boolean): void {
   document.body.classList.toggle('interactive', next)
   document.body.classList.toggle('idle', !next)
+  // Do not toggle the HTML hidden attribute on chrome/chat: UA [hidden]
+  // is display:none !important and fights body.interactive { display:flex }.
   form.removeAttribute('hidden')
   chrome.removeAttribute('hidden')
   if (next) {
+    if (spoken) setCaption(spoken)
     promptInput.focus({ preventScroll: true })
   }
 }
@@ -113,6 +116,7 @@ function setCaption(text: string): void {
 
 function wake(): void {
   void resumePlayback()
+  setInteractiveUi(true)
   void window.ordis.setInteractive(true)
 }
 
@@ -137,6 +141,7 @@ btnSettings.addEventListener('click', () => {
   void window.ordis.openSettings()
 })
 btnTuck.addEventListener('click', () => {
+  setInteractiveUi(false)
   void window.ordis.setInteractive(false)
 })
 window.ordis.onChunk((chunk) => {

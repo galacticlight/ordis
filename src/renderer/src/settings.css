@@ -6,7 +6,7 @@ h1 { margin:0 0 8px; color:var(--gold); letter-spacing:.08em; }
 form { display:flex; flex-direction:column; gap:12px; }
 label { display:flex; flex-direction:column; gap:6px; font-size:13px; }
 label.check { flex-direction:row; align-items:center; gap:8px; }
-input, select { background:#1c1a28; border:1px solid rgba(212,175,55,.5); color:var(--cream); border-radius:8px; padding:8px 10px; }
+input:not([type="checkbox"]), select { background:#1c1a28; border:1px solid rgba(212,175,55,.5); color:var(--cream); border-radius:8px; padding:8px 10px; }
 .row { display:flex; gap:8px; }
 button { background:var(--gold); color:var(--ink); border:none; border-radius:8px; padding:10px 14px; font-weight:700; cursor:pointer; }
 .hint, .status { font-size:12px; color:#c9c0aa; }
@@ -14,13 +14,15 @@ button { background:var(--gold); color:var(--ink); border:none; border-radius:8p
 .ghost { background:transparent; color:var(--gold); border:1px solid var(--gold); }
 
 input[type="checkbox"] {
+  -webkit-appearance: checkbox;
   appearance: auto;
-  width: 16px;
-  height: 16px;
+  width: 1.1em;
+  height: 1.1em;
   margin: 0;
   padding: 0;
   flex: none;
-  background: transparent;
-  border: 1px solid var(--gold);
+  background: none;
+  border: none;
+  border-radius: 0;
   accent-color: var(--gold);
 }

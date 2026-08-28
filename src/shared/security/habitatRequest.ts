@@ -53,17 +53,19 @@ export function isHabitatRequestAllowed(url: string, origins: HabitatAllowOrigin
 
 export function habitatConnectSrc(origins: HabitatAllowOrigins): string[] {
   const out: string[] = []
+  const push = (value: string): void => {
+    if (!out.includes(value)) out.push(value)
+  }
   const add = (raw: string | null | undefined): void => {
     const allowed = parseUrl(raw)
-    if (!allowed) return
-    const origin = allowed.origin
-    if (!out.includes(origin)) out.push(origin)
-    if (allowed.protocol === 'http:') {
-      const ws = origin.replace('http://', 'ws://')
-      if (!out.includes(ws)) out.push(ws)
-    } else if (allowed.protocol === 'https:') {
-      const wss = origin.replace('https://', 'wss://')
-      if (!out.includes(wss)) out.push(wss)
+    if (!allowed || !allowed.hostname) return
+    const host = allowed.host
+    if (allowed.protocol === 'https:' || allowed.protocol === 'wss:') {
+      push(`https://${host}`)
+      push(`wss://${host}`)
+    } else if (allowed.protocol === 'http:' || allowed.protocol === 'ws:') {
+      push(`http://${host}`)
+      push(`ws://${host}`)
     }
   }
   add(origins.devOrigin)
@@ -71,8 +73,11 @@ export function habitatConnectSrc(origins: HabitatAllowOrigins): string[] {
   return out
 }
 
+/** connect-src list matching the session pin extras, always starting with 'self'. */
+export function cspConnectSrc(origins: HabitatAllowOrigins): string {
+  return ["'self'", ...habitatConnectSrc(origins)].join(' ')
+}
+
 export function overlayContentSecurityPolicy(origins: HabitatAllowOrigins): string {
-  const extra = habitatConnectSrc(origins)
-  const connect = ["'self'", ...extra].join(' ')
-  return `default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'self' data:; connect-src ${connect}; media-src 'self'`
+  return `default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'self' data:; connect-src ${cspConnectSrc(origins)}; media-src 'self'`
 }

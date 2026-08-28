@@ -6,6 +6,10 @@ const GOLD = 0xd4af37
 const CYAN = 0x3ee8f0
 const INK = 0x12141c
 
+/** Cube glyph world position. Kept inside the 420x640 overlay frustum; no bob. */
+export const CUBE_GLYPH_POSITION = [0.3, -0.4, 0.48] as const
+export const OVERLAY_FRUSTUM = { width: 420, height: 640 } as const
+
 function creamMat(): THREE.MeshStandardMaterial {
   return new THREE.MeshStandardMaterial({ color: CREAM, metalness: 0.28, roughness: 0.42 })
 }
@@ -145,7 +149,7 @@ export class OrdisAvatar {
       if (obj.name.startsWith('eye-') && obj instanceof THREE.Mesh) this.eyes.push(obj)
     })
     this.glyph = createCubeGlyph()
-    this.glyph.position.set(0.36, -0.58, 0.45)
+    this.glyph.position.set(...CUBE_GLYPH_POSITION)
     this.scene.add(this.glyph)
     this.loop = this.loop.bind(this)
     this.raf = requestAnimationFrame(this.loop)

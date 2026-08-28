@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { habitatConnectSrc, isHabitatRequestAllowed, overlayContentSecurityPolicy } from '@shared/security/habitatRequest'
+import { cspConnectSrc, habitatConnectSrc, isHabitatRequestAllowed, overlayContentSecurityPolicy } from '@shared/security/habitatRequest'
 
 const openai = { vocalizerOrigin: 'https://api.openai.com', devOrigin: null }
 const vite = { vocalizerOrigin: null, devOrigin: 'http://localhost:5173' }
@@ -40,29 +40,58 @@ describe('isHabitatRequestAllowed', () => {
   })
 })
 
+function connectSources(csp: string): string[] {
+  return csp.match(/connect-src ([^;]+)/)?.[1]?.split(/\s+/).filter(Boolean) ?? []
+}
+
 describe('overlay CSP', () => {
-  it('does not wildcard connect-src to https:', () => {
-    const html = readFileSync(join(process.cwd(), 'src/renderer/index.html'), 'utf8')
-    const csp = html.match(/http-equiv="Content-Security-Policy"\s+content="([^"]+)"/)?.[1]
-    expect(csp).toBeTruthy()
-    expect(csp).not.toMatch(/connect-src[^;]*https:/)
-    expect(csp).toContain("connect-src 'self'")
+  it('does not wildcard connect-src to https: or localhost:*', () => {
+    for (const page of ['index.html', 'settings.html']) {
+      const html = readFileSync(join(process.cwd(), 'src/renderer', page), 'utf8')
+      const csp = html.match(/http-equiv="Content-Security-Policy"\s+content="([^"]+)"/)?.[1]
+      expect(csp, page).toBeTruthy()
+      const sources = connectSources(csp ?? '')
+      expect(sources).toContain("'self'")
+      expect(sources).not.toContain('https:')
+      expect(sources).not.toContain('http://localhost:*')
+      expect(sources).not.toContain('ws://localhost:*')
+      expect(html).not.toContain('http://localhost:*')
+      expect(html).not.toContain('ws://localhost:*')
+    }
+  })
+
+  it('main applies overlayContentSecurityPolicy on the habitat session', () => {
+    const main = readFileSync(join(process.cwd(), 'src/main/index.ts'), 'utf8')
+    expect(main).toContain('overlayContentSecurityPolicy')
+    expect(main).toContain('onHeadersReceived')
   })
 })
 
 describe('habitatConnectSrc', () => {
   it('empty endpoint adds no extra connect-src', () => {
     expect(habitatConnectSrc({ devOrigin: null, vocalizerOrigin: null })).toEqual([])
+    expect(cspConnectSrc({ devOrigin: null, vocalizerOrigin: null })).toBe("'self'")
     const csp = overlayContentSecurityPolicy({ devOrigin: null, vocalizerOrigin: null })
-    expect(csp).toContain("connect-src 'self'")
-    expect(csp).not.toMatch(/connect-src[^;]*https:/)
+    const sources = connectSources(csp)
+    expect(sources).toEqual(["'self'"])
+    expect(sources).not.toContain('https:')
     expect(csp).not.toContain('http://localhost:*')
   })
 
   it('includes the exact vite-dev origin when set', () => {
     const extra = habitatConnectSrc({ devOrigin: 'http://localhost:5173', vocalizerOrigin: null })
-    expect(extra).toContain('http://localhost:5173')
-    expect(extra).toContain('ws://localhost:5173')
-    expect(extra.some((v) => v.includes('*'))).toBe(false)
+    expect(extra).toEqual(['http://localhost:5173', 'ws://localhost:5173'])
+    expect(cspConnectSrc({ devOrigin: 'http://localhost:5173', vocalizerOrigin: null })).toBe(
+      "'self' http://localhost:5173 ws://localhost:5173"
+    )
+  })
+
+  it('pins vocalizer origin without an https: scheme wildcard', () => {
+    const extra = habitatConnectSrc(openai)
+    expect(extra).toEqual(['https://api.openai.com', 'wss://api.openai.com'])
+    const sources = connectSources(overlayContentSecurityPolicy(openai))
+    expect(sources).toContain("'self'")
+    expect(sources).toContain('https://api.openai.com')
+    expect(sources).not.toContain('https:')
   })
 })
