@@ -11,6 +11,7 @@ import { ingestOperatorUtterance } from '../shared/memory/operatorMemory'
 import { health, streamChatCompletion, LlmError } from '../shared/llm/provider'
 import { loadMemory, loadSettings, saveMemory, saveSettings, toPublicSettings } from './store'
 import { PlaintextKeyRefused } from '../shared/secrets'
+import { cancelTtsQueue, enqueueSynthesize, ttsAvailable } from './tts'
 
 let overlay: BrowserWindow | null = null
 let settingsWin: BrowserWindow | null = null
@@ -117,6 +118,30 @@ function persist(): void {
   saveMemory(memory)
 }
 
+function speak(text: string): void {
+  if (!settings.voiceOutEnabled || !ttsAvailable()) return
+  const trimmed = text.trim()
+  if (!trimmed) return
+  void enqueueSynthesize(trimmed).then((result) => {
+    if (!result) return
+    const pcm = Buffer.from(result.pcm.buffer, result.pcm.byteOffset, result.pcm.byteLength)
+    sendOverlay('ordis:voice', { sampleRate: result.sampleRate, pcm })
+  })
+}
+
+function speakLiveDelta(spoken: string, prefix: { value: string }): void {
+  if (spoken.length > prefix.value.length && spoken.startsWith(prefix.value)) {
+    speak(spoken.slice(prefix.value.length))
+    prefix.value = spoken
+    return
+  }
+  if (spoken !== prefix.value) {
+    cancelTtsQueue()
+    speak(spoken)
+    prefix.value = spoken
+  }
+}
+
 function createOverlay(): BrowserWindow {
   pinHabitatSession()
   const display = screen.getPrimaryDisplay().workArea
@@ -125,8 +150,8 @@ function createOverlay(): BrowserWindow {
   const win = new BrowserWindow({
     width,
     height,
-    x: display.x + display.width - width - 24,
-    y: display.y + display.height - height - 24,
+    x: display.x + display.width - width - 80,
+    y: display.y + 32,
     frame: false,
     transparent: true,
     alwaysOnTop: settings.alwaysOnTop,
@@ -164,7 +189,7 @@ function createOverlay(): BrowserWindow {
 function createSettings(): BrowserWindow {
   const win = new BrowserWindow({
     width: 520,
-    height: 700,
+    height: 720,
     frame: true,
     show: false,
     autoHideMenuBar: true,
@@ -199,6 +224,7 @@ async function runChat(text: string): Promise<void> {
   if (!trimmed) return
   abort?.abort()
   abort = new AbortController()
+  cancelTtsQueue()
   memory = ingestOperatorUtterance(memory, trimmed)
   history.push(newMessage('operator', trimmed))
   sendOverlay('ordis:status', 'thinking')
@@ -210,10 +236,12 @@ async function runChat(text: string): Promise<void> {
       full = guardOutgoing(canned ?? offlineReply(trimmed, config))
       sendOverlay('ordis:status', 'speaking')
       for (const chunk of streamText(full)) sendOverlay('ordis:chunk', chunk)
+      speak(full)
     } else {
       sendOverlay('ordis:status', 'speaking')
       const messages = composeMessages(memory, history.slice(0, -1), trimmed)
       const live = new LiveCaptionGuard()
+      const prefix = { value: '' }
       for await (const token of streamChatCompletion({
         apiBaseUrl: settings.apiBaseUrl,
         apiKey: settings.apiKey,
@@ -223,8 +251,10 @@ async function runChat(text: string): Promise<void> {
         signal: abort.signal
       })) {
         for (const chunk of live.push(token)) sendOverlay('ordis:chunk', chunk)
+        speakLiveDelta(live.text, prefix)
       }
       for (const chunk of live.finish()) sendOverlay('ordis:chunk', chunk)
+      speakLiveDelta(live.text, prefix)
       full = live.text
     }
   } catch (error) {
@@ -233,6 +263,7 @@ async function runChat(text: string): Promise<void> {
     full = guardOutgoing(`Operator, the live link failed (${message}). ${offlineReply(trimmed, config)}`)
     sendOverlay('ordis:status', 'speaking')
     for (const chunk of streamText(full)) sendOverlay('ordis:chunk', chunk)
+    speak(full)
   }
   history.push(newMessage('ordis', full))
   if (history.length > 40) history = history.slice(-40)
@@ -266,8 +297,8 @@ function registerIpc(): void {
     if (typeof patch.clickThroughIdle === 'boolean') next.clickThroughIdle = patch.clickThroughIdle
     if (typeof patch.captionsEnabled === 'boolean') next.captionsEnabled = patch.captionsEnabled
     if (typeof patch.chatterFrequency === 'number') next.chatterFrequency = patch.chatterFrequency
+    if (typeof patch.voiceOutEnabled === 'boolean') next.voiceOutEnabled = patch.voiceOutEnabled
     next.voiceInEnabled = false
-    next.voiceOutEnabled = false
     if (typeof patch.apiKey === 'string' && patch.apiKey.trim()) next.apiKey = patch.apiKey.trim()
     const previous = settings
     try {
@@ -283,6 +314,7 @@ function registerIpc(): void {
     }
     overlay?.setAlwaysOnTop(settings.alwaysOnTop, 'screen-saver')
     setInteractive(interactive)
+    if (!settings.voiceOutEnabled) cancelTtsQueue()
     sendOverlay('ordis:settings', toPublicSettings(settings))
     sendOverlay('ordis:captions', settings.captionsEnabled)
     return toPublicSettings(settings)
@@ -297,10 +329,12 @@ function registerIpc(): void {
   ipcMain.handle('overlay:set-interactive', (_e, next: boolean) => setInteractive(Boolean(next)))
   ipcMain.handle('overlay:open-settings', () => openSettings())
   ipcMain.handle('overlay:ready', () => {
-    sendOverlay('ordis:greeting', greeting())
+    const greetingText = greeting()
+    sendOverlay('ordis:greeting', greetingText)
     sendOverlay('ordis:status', 'idle')
     sendOverlay('ordis:interactive', interactive)
     sendOverlay('ordis:captions', settings.captionsEnabled)
+    speak(greetingText)
   })
   ipcMain.handle('app:quit', () => app.quit())
 }

@@ -7,6 +7,7 @@ const model = document.getElementById('model') as HTMLInputElement
 const alwaysOnTop = document.getElementById('alwaysOnTop') as HTMLInputElement
 const clickThroughIdle = document.getElementById('clickThroughIdle') as HTMLInputElement
 const captionsEnabled = document.getElementById('captionsEnabled') as HTMLInputElement
+const voiceOutEnabled = document.getElementById('voiceOutEnabled') as HTMLInputElement
 const keyStatus = document.getElementById('key-status') as HTMLParagraphElement
 const note = document.getElementById('note') as HTMLParagraphElement
 const saveBtn = document.getElementById('save') as HTMLButtonElement
@@ -25,6 +26,7 @@ async function load(): Promise<void> {
   alwaysOnTop.checked = s.alwaysOnTop
   clickThroughIdle.checked = s.clickThroughIdle
   captionsEnabled.checked = s.captionsEnabled
+  voiceOutEnabled.checked = s.voiceOutEnabled
   apiKey.value = ''
   keyStatus.textContent = describeKey(s)
 }
@@ -35,7 +37,8 @@ saveBtn.addEventListener('click', async () => {
     model: model.value.trim(),
     alwaysOnTop: alwaysOnTop.checked,
     clickThroughIdle: clickThroughIdle.checked,
-    captionsEnabled: captionsEnabled.checked
+    captionsEnabled: captionsEnabled.checked,
+    voiceOutEnabled: voiceOutEnabled.checked
   }
   const typed = apiKey.value.trim()
   if (typed) {

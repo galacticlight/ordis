@@ -49,7 +49,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   clickThroughIdle: true,
   captionsEnabled: true,
   chatterFrequency: 0,
-  voiceOutEnabled: false,
+  voiceOutEnabled: true,
   voiceInEnabled: false
 }
 

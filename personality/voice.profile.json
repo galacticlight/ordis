@@ -3,8 +3,14 @@
   "rate": 1.0,
   "pitch": 1.0,
   "radio_filter": {
-    "enabled": false,
-    "note": "Visual speech ripples carry the cephalon cue. Do not bitcrush, dual-voice, or stutter the audio."
+    "enabled": true,
+    "highpass_hz": 520,
+    "lowpass_hz": 3300,
+    "presence_hz": 1750,
+    "presence_gain": 2.2,
+    "am_hz": 72,
+    "am_depth": 0.14,
+    "note": "Light transmission EQ. Do not bitcrush, dual-voice, or stutter."
   },
   "forbid_dsp": ["stutter", "bitcrush", "dual-voice", "shout-layer", "scanline"]
 }

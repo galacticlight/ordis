@@ -41,7 +41,11 @@
         <input id="captionsEnabled" type="checkbox" />
         Captions
       </label>
-      <p class="hint">Voice in/out stay dark until an on-device vocalizer ships. Ordis will not pretend with a browser stub.</p>
+      <label class="check"><input id="voiceOutEnabled" type="checkbox" /> Radio vocalizer (on-device)</label>
+      <p class="hint">
+        Operator: needs espeak-ng on this machine. Generic tenor with a light radio path. Voice-in stays off until
+        on-device STT exists. Ordis will not pretend with a browser speechSynthesis stub.
+      </p>
       <div class="row">
         <button type="button" id="save">Save precepts</button>
         <button type="button" id="test" class="ghost">Test link</button>

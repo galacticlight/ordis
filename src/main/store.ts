@@ -69,13 +69,12 @@ export function loadSettings(): AppSettings {
     // keep defaults
   }
   base.voiceInEnabled = false
-  base.voiceOutEnabled = false
   return base
 }
 
 export function saveSettings(next: AppSettings): void {
   const packed = packSecret(next.apiKey, electronSecretBox())
-  const publicBit = { ...next, apiKey: undefined, voiceInEnabled: false, voiceOutEnabled: false }
+  const publicBit = { ...next, apiKey: undefined, voiceInEnabled: false }
   delete (publicBit as { apiKey?: string }).apiKey
   writeFileSync(settingsFile(), JSON.stringify(publicBit, null, 2), 'utf8')
   writeFileSync(secretsFile(), JSON.stringify(packed, null, 2), 'utf8')

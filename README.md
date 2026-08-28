@@ -62,27 +62,28 @@ See `.env.example`. Do not put real secrets in git.
 | Local Operator memory | `src/shared/memory/operatorMemory.ts` |
 | Status: idle / listening / thinking / speaking | overlay caption + eye pulse |
 | Settings for keys; offline fallback lines | Settings panel; `fallbacks.ts` |
-| Voice in / speech out stubs | Web Speech API + speechSynthesis, gated in Settings |
+| On-device radio vocalizer (voice out) | espeak-ng + shared radio filter; Settings checkbox, default on |
 
-### Voice path (stub)
+### Voice path
 
-- **In:** enable *Voice in (Web Speech stub)* then tap the mic. Chromium SpeechRecognition fills the composer.
-- **Out:** enable *Voice out*; finished replies speak via speechSynthesis.
-- Swap later for whisper.cpp / Piper without touching the personality engine: the main process already streams tokens independently of TTS.
+- **Out:** on-device `espeak-ng` (generic warm tenor) plus a light radio filter in the main process. Enable *Radio vocalizer (on-device)* in Settings (default on). Guarded sentences play through Web Audio in the overlay. If `espeak-ng` is missing, captions still work and speech stays silent.
+- **In:** still dark. No mic, no Web Speech, no browser `speechSynthesis` stub. On-device STT can replace this later without touching the personality engine.
+- Linux: `sudo apt install espeak-ng`. The rest of the stack is Electron (Chromium), so the overlay does not need WebKitGTK.
 
 ## Architecture
 
 ```
 src/
-  main/           Electron main: overlay window, IPC, persistence, LLM stream
+  main/           Electron main: overlay window, IPC, persistence, LLM stream, TTS
   preload/        contextBridge (no node in the renderer)
   renderer/       overlay UI + Three.js Sentinel and cube glyph
   shared/
     personality/  pack loader, precepts, idle, offline lines, engine, traps
     llm/          OpenAI-compatible SSE client
     memory/       Operator preferences
+    audio/        WAV PCM helpers + radio filter
     types.ts
-tests/            vitest — traps, loyalty, precepts, memory, SSE parser
+tests/            vitest — traps, loyalty, precepts, memory, SSE parser, radio DSP
 ```
 
 - **UI thread:** rAF cube + DOM. No LLM work. Tokens arrive over IPC.
