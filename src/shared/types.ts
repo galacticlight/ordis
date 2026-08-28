@@ -5,7 +5,6 @@ export interface ChatMessage {
   role: 'operator' | 'ordis' | 'system'
   content: string
   createdAt: number
-  glitched?: boolean
 }
 
 export interface LlmSettings {
@@ -17,9 +16,9 @@ export interface LlmSettings {
 
 export interface OverlaySettings {
   alwaysOnTop: boolean
-  idleTuck: boolean
-  glitchEnabled: boolean
-  glitchChance: number
+  clickThroughIdle: boolean
+  captionsEnabled: boolean
+  chatterFrequency: number
   voiceOutEnabled: boolean
   voiceInEnabled: boolean
 }
@@ -37,7 +36,7 @@ export interface OperatorMemory {
 }
 
 export interface StreamChunk {
-  type: 'token' | 'status' | 'done' | 'error' | 'glitch'
+  type: 'token' | 'status' | 'done' | 'error'
   value: string
 }
 
@@ -47,9 +46,9 @@ export const DEFAULT_SETTINGS: AppSettings = {
   model: 'gpt-4o-mini',
   temperature: 0.85,
   alwaysOnTop: true,
-  idleTuck: false,
-  glitchEnabled: true,
-  glitchChance: 0.18,
+  clickThroughIdle: true,
+  captionsEnabled: true,
+  chatterFrequency: 0,
   voiceOutEnabled: false,
   voiceInEnabled: false
 }
@@ -65,6 +64,19 @@ export const DEFAULT_MEMORY: OperatorMemory = {
 }
 
 export const SIGNATURE_LINE =
-  'I am Ordis, ship cephalon, a shadow of my former self.'
+  'I am Ordis, ship Cephalon. I serve the Operator. I make new memories.'
 
 export const NORTH_STAR = SIGNATURE_LINE
+
+export interface PublicSettings {
+  apiBaseUrl: string
+  model: string
+  temperature: number
+  alwaysOnTop: boolean
+  clickThroughIdle: boolean
+  captionsEnabled: boolean
+  chatterFrequency: number
+  voiceOutEnabled: boolean
+  voiceInEnabled: boolean
+  hasApiKey: boolean
+}

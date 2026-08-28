@@ -1,264 +1,246 @@
-import { app, BrowserWindow, ipcMain, screen, shell } from 'electron'
+import { app, BrowserWindow, globalShortcut, ipcMain, Menu, nativeImage, Tray, screen, shell, type NativeImage } from 'electron'
+import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { streamChatCompletion, LlmError } from '@shared/llm/openaiCompatible'
-import { ingestOperatorUtterance, rememberNote } from '@shared/memory/operatorMemory'
-import {
-  composeMessages,
-  greeting,
-  newMessage,
-  offlineReply,
-  streamText
-} from '@shared/personality/engine'
-import { looksLikeApiConfigured } from '@shared/personality/fallbacks'
-import { hasGlitchFormatting } from '@shared/personality/glitch'
-import { DEFAULT_SETTINGS, type AppSettings, type CompanionStatus } from '@shared/types'
-import { HabitatStore, habitatPath } from './store'
-
-const OVERLAY = {
-  expanded: { width: 380, height: 560 },
-  tucked: { width: 196, height: 228 }
-} as const
+import type { AppSettings, ChatMessage, PublicSettings, StreamChunk } from '../shared/types'
+import { DEFAULT_MEMORY, DEFAULT_SETTINGS, type OperatorMemory } from '../shared/types'
+import { canonicalReply, composeMessages, greeting, newMessage, offlineReply, streamText } from '../shared/personality/engine'
+import { loadPersonalityPack } from '../shared/personality/pack'
+import { guardOutgoing } from '../shared/personality/traps'
+import { ingestOperatorUtterance } from '../shared/memory/operatorMemory'
+import { health, streamChatCompletion, LlmError } from '../shared/llm/provider'
+import { loadMemory, loadSettings, saveMemory, saveSettings, toPublicSettings } from './store'
 
 let overlay: BrowserWindow | null = null
-let status: CompanionStatus = 'idle'
+let settingsWin: BrowserWindow | null = null
+let tray: Tray | null = null
+let settings: AppSettings = { ...DEFAULT_SETTINGS }
+let memory: OperatorMemory = { ...DEFAULT_MEMORY, likes: [], dislikes: [], notes: [], facts: {} }
+let history: ChatMessage[] = []
 let abort: AbortController | null = null
-const history: ReturnType<typeof newMessage>[] = []
+let interactive = false
 
-const store = new HabitatStore(habitatPath(app.getPath('userData')))
-const state = store.load()
-
-function send(channel: string, payload?: unknown): void {
-  overlay?.webContents.send(channel, payload)
+function isDev(): boolean {
+  return Boolean(process.env.ELECTRON_RENDERER_URL)
 }
 
-function setStatus(next: CompanionStatus): void {
-  status = next
-  send('ordis:status', status)
+function personalityDir(): string {
+  const packaged = app.isPackaged ? join(process.resourcesPath, 'personality') : null
+  const fromMain = join(__dirname, '../../personality')
+  const fromCwd = join(process.cwd(), 'personality')
+  for (const dir of [process.env.ORDIS_PERSONALITY_DIR, packaged, fromMain, fromCwd]) {
+    if (dir && existsSync(join(dir, 'ordis.v1.yaml'))) return dir
+  }
+  return fromCwd
+}
+
+function preloadPath(): string {
+  return join(__dirname, '../preload/index.js')
+}
+
+function sendOverlay(channel: string, payload: unknown): void {
+  if (overlay && !overlay.isDestroyed()) overlay.webContents.send(channel, payload)
+}
+
+function loadPage(win: BrowserWindow, page: 'index' | 'settings'): void {
+  const dev = process.env.ELECTRON_RENDERER_URL
+  if (dev) {
+    void win.loadURL(page === 'index' ? dev : `${dev}/${page}.html`)
+    return
+  }
+  const file = join(__dirname, `../renderer/${page}.html`)
+  void win.loadURL(pathToFileURL(file).toString())
+}
+
+function setClickThrough(ignore: boolean): void {
+  if (!overlay || overlay.isDestroyed()) return
+  if (ignore) overlay.setIgnoreMouseEvents(true, { forward: true })
+  else overlay.setIgnoreMouseEvents(false)
+}
+
+function setInteractive(next: boolean): void {
+  interactive = next
+  setClickThrough(settings.clickThroughIdle && !interactive)
+  sendOverlay('ordis:interactive', interactive)
 }
 
 function persist(): void {
-  store.save(state)
+  saveSettings(settings)
+  saveMemory(memory)
 }
 
-function applyEnvOverrides(settings: AppSettings): AppSettings {
-  const next = { ...settings }
-  const envUrl = process.env.ORDIS_API_BASE_URL
-  const envKey = process.env.ORDIS_API_KEY
-  const envModel = process.env.ORDIS_MODEL
-  if (!next.apiBaseUrl && envUrl) {
-    next.apiBaseUrl = envUrl
-  }
-  if (!next.apiKey && envKey) {
-    next.apiKey = envKey
-  }
-  if (envModel && next.model === DEFAULT_SETTINGS.model) {
-    next.model = envModel
-  }
-  return next
-}
-
-function redact(settings: AppSettings): AppSettings {
-  if (!settings.apiKey) {
-    return settings
-  }
-  const visible =
-    settings.apiKey.length <= 8
-      ? '********'
-      : `${settings.apiKey.slice(0, 3)}***${settings.apiKey.slice(-2)}`
-  return { ...settings, apiKey: visible }
-}
-
-async function createOverlay(): Promise<void> {
+function createOverlay(): BrowserWindow {
   const display = screen.getPrimaryDisplay().workArea
-  const { width, height } = OVERLAY.expanded
-  overlay = new BrowserWindow({
+  const width = 380
+  const height = 560
+  const win = new BrowserWindow({
     width,
     height,
     x: display.x + display.width - width - 24,
     y: display.y + display.height - height - 24,
     frame: false,
     transparent: true,
-    backgroundColor: '#00000000',
-    hasShadow: false,
-    alwaysOnTop: state.settings.alwaysOnTop,
+    alwaysOnTop: settings.alwaysOnTop,
     skipTaskbar: true,
-    resizable: true,
+    hasShadow: false,
+    resizable: false,
+    fullscreenable: false,
     minimizable: false,
     maximizable: false,
-    fullscreenable: false,
+    backgroundColor: '#00000000',
     show: false,
     webPreferences: {
-      preload: join(__dirname, '../preload/index.js'),
+      preload: preloadPath(),
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
-      backgroundThrottling: true
+      backgroundThrottling: true,
+      devTools: isDev()
     }
   })
-
-  overlay.setAlwaysOnTop(state.settings.alwaysOnTop, 'screen-saver')
-  overlay.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
-
-  overlay.webContents.setWindowOpenHandler((details) => {
+  win.setMenuBarVisibility(false)
+  if (settings.alwaysOnTop) win.setAlwaysOnTop(true, 'screen-saver')
+  win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
+  win.setIgnoreMouseEvents(true, { forward: true })
+  win.webContents.setWindowOpenHandler((details) => {
     void shell.openExternal(details.url)
     return { action: 'deny' }
   })
-
-  overlay.on('ready-to-show', () => {
-    overlay?.showInactive()
-    send('ordis:greeting', greeting())
-    setStatus('idle')
-  })
-
-  overlay.on('closed', () => {
-    overlay = null
-  })
-
-  if (process.env.ELECTRON_RENDERER_URL) {
-    await overlay.loadURL(process.env.ELECTRON_RENDERER_URL)
-  } else {
-    const file = join(__dirname, '../renderer/index.html')
-    await overlay.loadURL(pathToFileURL(file).toString())
-  }
+  loadPage(win, 'index')
+  win.once('ready-to-show', () => win.showInactive())
+  return win
 }
 
-function placeTucked(tucked: boolean): void {
-  if (!overlay) {
-    return
-  }
-  const display = screen.getPrimaryDisplay().workArea
-  const size = tucked ? OVERLAY.tucked : OVERLAY.expanded
-  overlay.setSize(size.width, size.height)
-  overlay.setPosition(display.x + display.width - size.width - 16, display.y + 16)
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => {
-    setTimeout(resolve, ms)
-  })
-}
-
-async function speakOffline(operatorText: string): Promise<void> {
-  const result = offlineReply(operatorText, {
-    apiKey: state.settings.apiKey,
-    apiBaseUrl: state.settings.apiBaseUrl,
-    glitchEnabled: state.settings.glitchEnabled,
-    glitchChance: state.settings.glitchChance
-  })
-  setStatus('speaking')
-  for (const chunk of streamText(result.text)) {
-    if (chunk.type === 'token') {
-      send('ordis:token', chunk.value)
-      await sleep(18)
+function createSettings(): BrowserWindow {
+  const win = new BrowserWindow({
+    width: 520,
+    height: 700,
+    frame: true,
+    show: false,
+    autoHideMenuBar: true,
+    title: 'Ordis — Settings',
+    backgroundColor: '#14121c',
+    webPreferences: {
+      preload: preloadPath(),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+      devTools: isDev()
     }
-  }
-  history.push(newMessage('ordis', result.text, result.glitched))
-  send('ordis:done', { content: result.text, glitched: result.glitched })
-  setStatus('idle')
+  })
+  win.setMenuBarVisibility(false)
+  loadPage(win, 'settings')
+  win.on('close', (event) => {
+    event.preventDefault()
+    win.hide()
+  })
+  return win
 }
 
-async function speakLive(operatorText: string): Promise<void> {
-  const messages = composeMessages(state.memory, history, operatorText)
+function openSettings(): void {
+  if (!settingsWin || settingsWin.isDestroyed()) settingsWin = createSettings()
+  settingsWin.show()
+  settingsWin.focus()
+}
+
+async function runChat(text: string): Promise<void> {
+  const trimmed = text.trim()
+  if (!trimmed) return
+  abort?.abort()
   abort = new AbortController()
-  setStatus('thinking')
-  let assembled = ''
-  let first = true
+  memory = ingestOperatorUtterance(memory, trimmed)
+  history.push(newMessage('operator', trimmed))
+  sendOverlay('ordis:status', 'thinking')
+  const config = { apiKey: settings.apiKey, apiBaseUrl: settings.apiBaseUrl }
+  let full = ''
   try {
-    for await (const token of streamChatCompletion({
-      apiBaseUrl: state.settings.apiBaseUrl,
-      apiKey: state.settings.apiKey,
-      model: state.settings.model,
-      temperature: state.settings.temperature,
-      messages,
-      signal: abort.signal
-    })) {
-      if (first) {
-        setStatus('speaking')
-        first = false
+    const canned = canonicalReply(trimmed)
+    if (canned || !settings.apiKey.trim() || !settings.apiBaseUrl.trim()) {
+      full = canned ?? offlineReply(trimmed, config)
+      sendOverlay('ordis:status', 'speaking')
+      for (const chunk of streamText(full)) sendOverlay('ordis:chunk', chunk)
+    } else {
+      sendOverlay('ordis:status', 'speaking')
+      const messages = composeMessages(memory, history.slice(0, -1), trimmed)
+      for await (const token of streamChatCompletion({
+        apiBaseUrl: settings.apiBaseUrl,
+        apiKey: settings.apiKey,
+        model: settings.model,
+        temperature: settings.temperature,
+        messages,
+        signal: abort.signal
+      })) {
+        full += token
+        const chunk: StreamChunk = { type: 'token', value: token }
+        sendOverlay('ordis:chunk', chunk)
       }
-      assembled += token
-      send('ordis:token', token)
+      full = guardOutgoing(full)
+      sendOverlay('ordis:chunk', { type: 'done', value: full } satisfies StreamChunk)
     }
   } catch (error) {
-    if (abort.signal.aborted) {
-      return
-    }
-    const message =
-      error instanceof LlmError
-        ? error.message
-        : error instanceof Error
-          ? error.message
-          : 'Unknown vocalizer fault'
-    send(
-      'ordis:error',
-      `Operator, the live link failed. ${message} Ordis will speak from local precepts.`
-    )
-    await speakOffline(operatorText)
-    return
+    if (abort.signal.aborted) return
+    const message = error instanceof LlmError ? error.message : error instanceof Error ? error.message : 'Vocalizer fault'
+    full = guardOutgoing(`Operator, the live link failed (${message}). ${offlineReply(trimmed, config)}`)
+    sendOverlay('ordis:status', 'speaking')
+    for (const chunk of streamText(full)) sendOverlay('ordis:chunk', chunk)
   }
+  history.push(newMessage('ordis', full))
+  if (history.length > 40) history = history.slice(-40)
+  persist()
+  sendOverlay('ordis:status', 'idle')
+}
 
-  const glitched = hasGlitchFormatting(assembled)
-  history.push(newMessage('ordis', assembled, glitched))
-  send('ordis:done', { content: assembled, glitched })
-  setStatus('idle')
+function trayIcon(): NativeImage {
+  const candidates = [
+    join(__dirname, '../../resources/icon.png'),
+    join(process.cwd(), 'resources/icon.png'),
+    typeof process.resourcesPath === 'string' ? join(process.resourcesPath, 'icon.png') : ''
+  ]
+  for (const file of candidates) {
+    if (file && existsSync(file)) {
+      const image = nativeImage.createFromPath(file)
+      if (!image.isEmpty()) return image
+    }
+  }
+  return nativeImage.createEmpty()
 }
 
 function registerIpc(): void {
-  ipcMain.handle('ordis:chat', async (_event, text: string) => {
-    const value = (text ?? '').trim()
-    if (value.length === 0) {
-      return
-    }
-    abort?.abort()
-    history.push(newMessage('operator', value))
-    state.memory = ingestOperatorUtterance(state.memory, value)
+  ipcMain.handle('settings:get', (): PublicSettings => toPublicSettings(settings))
+  ipcMain.handle('settings:save', (_e, patch: Partial<PublicSettings> & { apiKey?: string }) => {
+    const next: AppSettings = { ...settings }
+    if (typeof patch.apiBaseUrl === 'string') next.apiBaseUrl = patch.apiBaseUrl.trim()
+    if (typeof patch.model === 'string') next.model = patch.model.trim()
+    if (typeof patch.temperature === 'number') next.temperature = patch.temperature
+    if (typeof patch.alwaysOnTop === 'boolean') next.alwaysOnTop = patch.alwaysOnTop
+    if (typeof patch.clickThroughIdle === 'boolean') next.clickThroughIdle = patch.clickThroughIdle
+    if (typeof patch.captionsEnabled === 'boolean') next.captionsEnabled = patch.captionsEnabled
+    if (typeof patch.chatterFrequency === 'number') next.chatterFrequency = patch.chatterFrequency
+    if (typeof patch.apiKey === 'string' && patch.apiKey.trim()) next.apiKey = patch.apiKey.trim()
+    settings = next
     persist()
-    const keyed = looksLikeApiConfigured(state.settings.apiKey, state.settings.apiBaseUrl)
-    if (!keyed) {
-      await speakOffline(value)
-      return
-    }
-    await speakLive(value)
+    overlay?.setAlwaysOnTop(settings.alwaysOnTop, 'screen-saver')
+    setInteractive(interactive)
+    sendOverlay('ordis:settings', toPublicSettings(settings))
+    sendOverlay('ordis:captions', settings.captionsEnabled)
+    return toPublicSettings(settings)
   })
-
-  ipcMain.handle('ordis:abort', () => {
-    abort?.abort()
-    setStatus('idle')
+  ipcMain.handle('settings:test', async () => {
+    if (!settings.apiKey.trim()) return { ok: false, error: 'No key stored. Ordis will speak from local precepts.' }
+    return health(settings.apiBaseUrl, settings.apiKey)
   })
-
-  ipcMain.handle('ordis:settings:get', () => redact(applyEnvOverrides(state.settings)))
-
-  ipcMain.handle('ordis:settings:save', (_event, patch: Partial<AppSettings>) => {
-    const next = { ...state.settings, ...patch }
-    if (typeof next.apiKey === 'string' && next.apiKey.includes('***')) {
-      next.apiKey = state.settings.apiKey
-    }
-    state.settings = next
-    persist()
-    overlay?.setAlwaysOnTop(state.settings.alwaysOnTop, 'screen-saver')
-    return redact(state.settings)
+  ipcMain.handle('chat:send', async (_e, text: string) => {
+    await runChat(String(text ?? ''))
   })
-
-  ipcMain.handle('ordis:memory:get', () => state.memory)
-
-  ipcMain.handle('ordis:memory:remember', (_event, note: string) => {
-    state.memory = rememberNote(state.memory, String(note ?? ''))
-    persist()
-    return state.memory
+  ipcMain.handle('overlay:set-interactive', (_e, next: boolean) => setInteractive(Boolean(next)))
+  ipcMain.handle('overlay:open-settings', () => openSettings())
+  ipcMain.handle('overlay:ready', () => {
+    sendOverlay('ordis:greeting', greeting())
+    sendOverlay('ordis:status', 'idle')
+    sendOverlay('ordis:interactive', interactive)
+    sendOverlay('ordis:captions', settings.captionsEnabled)
   })
-
-  ipcMain.handle('ordis:history:get', () => history)
-
-  ipcMain.handle('ordis:tuck', (_event, tucked: boolean) => {
-    state.settings.idleTuck = tucked
-    persist()
-    placeTucked(tucked)
-  })
-
-  ipcMain.handle('ordis:ignore-mouse', (_event, ignore: boolean) => {
-    overlay?.setIgnoreMouseEvents(Boolean(ignore), { forward: true })
-  })
+  ipcMain.handle('app:quit', () => app.quit())
 }
 
 app.commandLine.appendSwitch('enable-transparent-visuals')
@@ -267,24 +249,41 @@ const gotLock = app.requestSingleInstanceLock()
 if (!gotLock) {
   app.quit()
 } else {
-  app.on('second-instance', () => {
-    if (overlay) {
-      if (overlay.isMinimized()) {
-        overlay.restore()
-      }
-      overlay.show()
-      overlay.focus()
+  void app.whenReady().then(() => {
+    loadPersonalityPack(personalityDir())
+    settings = loadSettings()
+    memory = loadMemory()
+    registerIpc()
+    Menu.setApplicationMenu(null)
+    overlay = createOverlay()
+    settingsWin = createSettings()
+    tray = new Tray(trayIcon())
+    tray.setToolTip('Ordis')
+    tray.setContextMenu(
+      Menu.buildFromTemplate([
+        { label: 'Interact', click: () => setInteractive(true) },
+        { label: 'Settings…', click: () => openSettings() },
+        { type: 'separator' },
+        { label: 'Quit Ordis', click: () => app.quit() }
+      ])
+    )
+    tray.on('click', () => setInteractive(!interactive))
+    setInteractive(false)
+    try {
+      globalShortcut.register('CommandOrControl+Shift+O', () => setInteractive(!interactive))
+      globalShortcut.register('CommandOrControl+,', () => openSettings())
+    } catch {
+      // headless / no accelerator host
     }
   })
 
-  void app.whenReady().then(async () => {
-    state.settings = applyEnvOverrides(state.settings)
-    registerIpc()
-    await createOverlay()
+  app.on('before-quit', () => {
+    persist()
+    if (settingsWin && !settingsWin.isDestroyed()) {
+      settingsWin.removeAllListeners('close')
+      settingsWin.close()
+    }
   })
-
-  app.on('window-all-closed', () => {
-    app.quit()
-  })
+  app.on('window-all-closed', () => app.quit())
+  app.on('will-quit', () => globalShortcut.unregisterAll())
 }
-

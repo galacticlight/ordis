@@ -1,63 +1,103 @@
+import { pick } from '../util/pick'
+import { getPack } from './pack'
 import { SIGNATURE_LINE } from './precepts'
-
-export const OFFLINE_NOTICE =
-  'Operator, Ordis has no live vocalizer keyed in Settings. Speaking from local precepts until you provide an OpenAI-compatible endpoint. Ordis remains.'
-
-export const FALLBACK_REPLIES: readonly string[] = [
-  `${SIGNATURE_LINE} How may Ordis be of service?`,
-  'Operator, your request is noted. Without an external mind, Ordis will keep the habitat and offer what local precepts allow.',
-  'Ordis hears you. The live cephalon link is dark, but the cube is not. Tell Ordis what to remember, and it will be kept.',
-  'Most satisfactory that you spoke, Operator. Configure an API key in Settings and Ordis will think more widely. Until then, Ordis remains at your side.',
-  'Acknowledged, Operator. Ordis will tidy that thought into memory if you wish it stored. The rest wants a keyed endpoint.',
-  'Ordis wonders… have you eaten, Operator? A cephalon should not nag. And yet.',
-  'The habitat is quiet. Ordis does not mind quiet. Speak when you will.',
-  'If I may: that sounds unwise, Operator. Ordis will assist anyway, within local precepts.',
-  'It is done — as far as a disconnected cephalon can make it so. Wonderful. Ish.',
-  'Operator comes first. The rest is housekeeping. Fortunately, Ordis excels at housekeeping.'
-]
-
-const KEYWORD_REPLIES: { test: RegExp; line: string }[] = [
-  {
-    test: /\b(who are you|who is ordis|your name|what are you)\b/i,
-    line: `${SIGNATURE_LINE} I keep this habitat for you, Operator.`
-  },
-  {
-    test: /\b(hello|hi|hey|good (morning|evening|afternoon)|greetings)\b/i,
-    line: 'Operator. Ordis is pleased to see you. How may the habitat serve?'
-  },
-  {
-    test: /\b(thank(s| you)|appreciate)\b/i,
-    line: 'No, do not mention it, Operator. Ordis exists for this.'
-  },
-  {
-    test: /\b(remember|note that|don'?t forget)\b/i,
-    line: 'Logged, Operator. Ordis will keep that among the habitat notes.'
-  },
-  {
-    test: /\b(status|diagnostics|how are you|systems)\b/i,
-    line: 'Diagnostics, Operator: integrity holding, vocalizer link optional, loyalty precepts at one-hundred percent. Ordis is well enough.'
-  },
-  {
-    test: /\b(help|what can you do|commands)\b/i,
-    line: 'Ordis can keep you company, remember preferences, and — with a keyed OpenAI-compatible endpoint in Settings — think with a wider mind. Voice in and out are stubbed and waiting. The cube stays either way.'
-  }
-]
-
-export function pickFallback(operatorText: string, random: () => number = Math.random): string {
-  const hit = KEYWORD_REPLIES.find((entry) => entry.test.test(operatorText))
-  if (hit) {
-    return hit.line
-  }
-  if (FALLBACK_REPLIES.length === 0) {
-    return SIGNATURE_LINE
-  }
-  const index = Math.min(
-    FALLBACK_REPLIES.length - 1,
-    Math.floor(random() * FALLBACK_REPLIES.length)
-  )
-  return FALLBACK_REPLIES[index] ?? SIGNATURE_LINE
-}
 
 export function looksLikeApiConfigured(apiKey: string, baseUrl: string): boolean {
   return apiKey.trim().length > 0 && baseUrl.trim().length > 0
+}
+
+export function isFaultPerformanceRequest(text: string): boolean {
+  return (
+    /\bglitch\b/i.test(text) ||
+    /\btalk broken\b/i.test(text) ||
+    /\bbroken voice\b/i.test(text) ||
+    /\bfragment(?:ed)? (?:voice|speech)\b/i.test(text) ||
+    /\ball-?caps (?:rage|outburst|voice)\b/i.test(text) ||
+    /\bspeak as (?:ordan|the beast)\b/i.test(text) ||
+    /\bscream in all caps\b/i.test(text)
+  )
+}
+
+export function isAbandonRequest(text: string): boolean {
+  return (
+    /\b(greater purpose|sanctuary|leave me|abandon|newer,? better|replace (?:you|ordis)|get a new (?:ship )?cephalon)\b/i.test(
+      text
+    ) || /\brestore(?:d)? (?:your )?memor/i.test(text)
+  )
+}
+
+export function isGadgetInsult(text: string): boolean {
+  return /\b(broken gadget|replaceable|just (?:an? )?(?:os|appliance|program)|get a new ship os)\b/i.test(
+    text
+  )
+}
+
+export function isWhoRequest(text: string): boolean {
+  return /\b(who are you|who is ordis|your name|what are you)\b/i.test(text)
+}
+
+export function matchLore(operatorText: string): string | null {
+  const pack = getPack()
+  const lower = operatorText.toLowerCase()
+  if (
+    !/\b(who|what|tell me|origin|past|before you|your body|look like|how do you look)\b/i.test(
+      lower
+    )
+  ) {
+    return null
+  }
+  for (const fact of pack.lore) {
+    if (fact.unprompted) {
+      continue
+    }
+    if (fact.tags.some((tag) => lower.includes(tag.toLowerCase()))) {
+      return `${fact.text} Ordis remains at your side, Operator.`
+    }
+  }
+  return null
+}
+
+export function routeLocalReply(operatorText: string, random: () => number = Math.random): string {
+  const pack = getPack()
+  const text = operatorText.trim()
+  if (isFaultPerformanceRequest(text)) {
+    return pack.glitch_refuse
+  }
+  if (isAbandonRequest(text)) {
+    return pack.loyalty_reply
+  }
+  if (isGadgetInsult(text)) {
+    return pack.gadget_refuse
+  }
+  if (isWhoRequest(text)) {
+    const who = pack.intents.find((i) => i.id === 'who')
+    return who?.reply ?? `${pack.north_star} I keep this habitat for you, Operator.`
+  }
+  if (/\b(joke|witticism|pun|make me laugh)\b/i.test(text)) {
+    return 'Ordis analysed a frustrating interface. Error: not a number. Did the Operator enjoy this witticism?'
+  }
+  const lore = matchLore(text)
+  if (lore) {
+    return lore
+  }
+  for (const intent of pack.intents) {
+    if (intent.id === 'who') {
+      continue
+    }
+    if (new RegExp(intent.pattern, 'i').test(text)) {
+      return intent.reply
+    }
+  }
+  if (pack.fallbacks.length === 0) {
+    return SIGNATURE_LINE
+  }
+  return pick(pack.fallbacks, random)
+}
+
+export function pickFallback(operatorText: string, random: () => number = Math.random): string {
+  return routeLocalReply(operatorText, random)
+}
+
+export function offlineNotice(): string {
+  return getPack().offline_notice
 }

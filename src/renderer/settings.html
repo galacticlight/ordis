@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'"
+    />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Ordis — Settings</title>
+    <link rel="stylesheet" href="./src/settings.css" />
+  </head>
+  <body>
+    <main class="sheet">
+      <h1>Cephalon link</h1>
+      <p class="lede">
+        Keys stay in this habitat’s user-data (encrypted when the OS allows). They are never
+        committed, and the overlay never receives the raw key.
+      </p>
+      <label>
+        Endpoint
+        <input id="apiBaseUrl" type="url" placeholder="https://api.openai.com/v1" />
+      </label>
+      <label>
+        API key
+        <input id="apiKey" type="password" placeholder="paste to store or replace" autocomplete="off" />
+      </label>
+      <p id="key-status" class="hint"></p>
+      <label>
+        Model
+        <input id="model" type="text" placeholder="gpt-4o-mini" />
+      </label>
+      <label class="check">
+        <input id="alwaysOnTop" type="checkbox" />
+        Always on top
+      </label>
+      <label class="check">
+        <input id="clickThroughIdle" type="checkbox" />
+        Click-through when idle (hover or tray to wake)
+      </label>
+      <label class="check">
+        <input id="captionsEnabled" type="checkbox" />
+        Captions
+      </label>
+      <label class="check">
+        <input id="voiceInEnabled" type="checkbox" />
+        Voice in (Web Speech stub)
+      </label>
+      <label class="check">
+        <input id="voiceOutEnabled" type="checkbox" />
+        Voice out (speechSynthesis stub)
+      </label>
+      <div class="row">
+        <button type="button" id="save">Save precepts</button>
+        <button type="button" id="test" class="ghost">Test link</button>
+      </div>
+      <p id="note" class="hint"></p>
+    </main>
+    <script type="module" src="./src/settings.ts"></script>
+  </body>
+</html>

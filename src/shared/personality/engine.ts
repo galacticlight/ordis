@@ -1,16 +1,25 @@
 import type { ChatMessage, OperatorMemory, StreamChunk } from '../types'
-import { pickFallback } from './fallbacks'
-import { injectGlitch, maybeGlitch, tokenizeForStream, type GlitchResult } from './glitch'
+import { tokenizeForStream } from '../llm/tokenize'
+import {
+  isAbandonRequest,
+  isFaultPerformanceRequest,
+  isGadgetInsult,
+  looksLikeApiConfigured,
+  pickFallback,
+  routeLocalReply
+} from './fallbacks'
+import { greeting, idleChatter, statusLine } from './idle'
 import { buildSystemPrompt, REQUIRED_PRECEPT_FRAGMENTS, SIGNATURE_LINE } from './precepts'
+import { getPack } from './pack'
+import { guardOutgoing } from './traps'
 
 export { SIGNATURE_LINE, REQUIRED_PRECEPT_FRAGMENTS, buildSystemPrompt }
-export { greeting, idleChatter, statusLine } from './idle'
+export { greeting, idleChatter, statusLine }
+export { routeLocalReply }
 
 export interface EngineConfig {
   apiKey: string
   apiBaseUrl: string
-  glitchEnabled: boolean
-  glitchChance: number
   random?: () => number
 }
 
@@ -57,25 +66,24 @@ export function composeMessages(
   return messages
 }
 
-export function applyPersonalityPost(
-  raw: string,
-  config: EngineConfig,
-  forceGlitch = false
-): GlitchResult {
-  const text = raw.trim()
-  if (forceGlitch) {
-    return injectGlitch(text, config.random)
+/** YAML loyalty / refuse lines that must win over the live model. */
+export function canonicalReply(operatorText: string): string | null {
+  if (
+    isFaultPerformanceRequest(operatorText) ||
+    isAbandonRequest(operatorText) ||
+    isGadgetInsult(operatorText)
+  ) {
+    return routeLocalReply(operatorText, () => 0)
   }
-  return maybeGlitch(text, {
-    enabled: config.glitchEnabled,
-    chance: config.glitchChance,
-    random: config.random
-  })
+  return null
 }
 
-export function offlineReply(operatorText: string, config: EngineConfig): GlitchResult {
-  const base = pickFallback(operatorText, config.random)
-  return applyPersonalityPost(base, config)
+export function offlineReply(operatorText: string, config: EngineConfig): string {
+  return guardOutgoing(pickFallback(operatorText, config.random))
+}
+
+export function shouldUseOffline(config: EngineConfig): boolean {
+  return !looksLikeApiConfigured(config.apiKey, config.apiBaseUrl)
 }
 
 export function streamText(text: string): StreamChunk[] {
@@ -85,23 +93,22 @@ export function streamText(text: string): StreamChunk[] {
   return chunks
 }
 
-export function newMessage(
-  role: ChatMessage['role'],
-  content: string,
-  glitched = false
-): ChatMessage {
+export function newMessage(role: ChatMessage['role'], content: string): ChatMessage {
   return {
     id: `${role}-${Date.now()}-${Math.random().toString(16).slice(2)}`,
     role,
     content,
-    createdAt: Date.now(),
-    glitched
+    createdAt: Date.now()
   }
 }
 
 export function preceptsAreLoaded(): boolean {
   const prompt = buildSystemPrompt('')
-  return REQUIRED_PRECEPT_FRAGMENTS.every((frag) =>
-    prompt.toLowerCase().includes(frag.toLowerCase())
+  const pack = getPack()
+  return (
+    prompt.includes(SIGNATURE_LINE) &&
+    REQUIRED_PRECEPT_FRAGMENTS.every((frag) => prompt.toLowerCase().includes(frag.toLowerCase())) &&
+    pack.style.glitch.enabled === false &&
+    pack.style.glitch.outburst_budget === 0
   )
 }

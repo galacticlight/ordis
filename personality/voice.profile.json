@@ -1,0 +1,10 @@
+{
+  "speaker": "generic-warm-tenor",
+  "rate": 1.0,
+  "pitch": 1.0,
+  "radio_filter": {
+    "enabled": false,
+    "note": "Visual speech ripples carry the cephalon cue. Do not bitcrush, dual-voice, or stutter the audio."
+  },
+  "forbid_dsp": ["stutter", "bitcrush", "dual-voice", "shout-layer", "scanline"]
+}

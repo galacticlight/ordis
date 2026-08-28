@@ -13,3 +13,14 @@ describe('OpenAI-compatible SSE parser', () => {
     expect(parseSseLine('data: not-json')).toBeNull()
   })
 })
+
+import { tokenizeForStream } from '@shared/llm/tokenize'
+
+describe('tokenizeForStream', () => {
+  it('keeps words so streaming stays live', () => {
+    const text = 'Operator, Ordis remains.'
+    const tokens = tokenizeForStream(text)
+    expect(tokens.join('')).toBe(text)
+    expect(tokens.length).toBeGreaterThan(1)
+  })
+})
