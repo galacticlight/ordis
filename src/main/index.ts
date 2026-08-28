@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import type { AppSettings, ChatMessage, PublicSettings } from '../shared/types'
 import { DEFAULT_MEMORY, DEFAULT_SETTINGS, type OperatorMemory } from '../shared/types'
-import { canonicalReply, composeMessages, greeting, newMessage, offlineReply, streamText } from '../shared/personality/engine'
+import { canonicalReply, composeMessages, greeting, LiveCaptionGuard, newMessage, offlineReply, streamText } from '../shared/personality/engine'
 import { loadPersonalityPack } from '../shared/personality/pack'
 import { guardOutgoing } from '../shared/personality/traps'
 import { ingestOperatorUtterance } from '../shared/memory/operatorMemory'
@@ -162,6 +162,7 @@ async function runChat(text: string): Promise<void> {
     } else {
       sendOverlay('ordis:status', 'speaking')
       const messages = composeMessages(memory, history.slice(0, -1), trimmed)
+      const live = new LiveCaptionGuard()
       for await (const token of streamChatCompletion({
         apiBaseUrl: settings.apiBaseUrl,
         apiKey: settings.apiKey,
@@ -170,10 +171,10 @@ async function runChat(text: string): Promise<void> {
         messages,
         signal: abort.signal
       })) {
-        full += token
+        for (const chunk of live.push(token)) sendOverlay('ordis:chunk', chunk)
       }
-      full = guardOutgoing(full)
-      for (const chunk of streamText(full)) sendOverlay('ordis:chunk', chunk)
+      for (const chunk of live.finish()) sendOverlay('ordis:chunk', chunk)
+      full = live.text
     }
   } catch (error) {
     if (abort.signal.aborted) return

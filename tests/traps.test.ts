@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { detectTraps, guardOutgoing, isClean, assertClean } from '@shared/personality/traps'
-import { streamText } from '@shared/personality/engine'
+import { LiveCaptionGuard, streamText } from '@shared/personality/engine'
 import { spokenFixtureLines } from '@shared/personality/pack'
 import { NORTH_STAR } from '@shared/types'
 
@@ -67,5 +67,28 @@ describe('captions never flash a trap', () => {
     const done = chunks.at(-1)
     expect(done?.type).toBe('done')
     expect(done?.value).toBe(guardOutgoing(dirty))
+  })
+})
+
+describe('live sentence-boundary guard', () => {
+  it('emits a clean first sentence before the rest arrives', () => {
+    const live = new LiveCaptionGuard()
+    const mid = live.push('Integrity is holding. ')
+    expect(mid.some((c) => c.type === 'token' && c.value.includes('Integrity'))).toBe(true)
+    expect(mid.every((c) => isClean(c.value))).toBe(true)
+    const done = live.finish()
+    expect(done.at(-1)?.value).toContain('Integrity is holding.')
+  })
+
+  it('does not emit a dirty sentence as tokens', () => {
+    const live = new LiveCaptionGuard()
+    live.push('Integrity is holding. ')
+    const dirty = live.push('The habitat is — TEAR THEM APART — tidy.')
+    const rest = live.finish()
+    const chunks = [...dirty, ...rest]
+    for (const chunk of chunks) {
+      expect(chunk.value).not.toMatch(/TEAR THEM APART/)
+      expect(isClean(chunk.value)).toBe(true)
+    }
   })
 })
