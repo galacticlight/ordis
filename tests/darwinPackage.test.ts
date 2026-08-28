@@ -19,4 +19,13 @@ describe("darwin-arm64 package job", () => {
     expect(builder).toMatch(/identity:\s*null/)
     expect(pkg).toContain("package:darwin-arm64")
   })
+
+  it("ships a 512px-or-larger icon.png for electron-builder mac", () => {
+    const png = readFileSync(join(root, "resources/icon.png"))
+    expect(png.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))).toBe(true)
+    const width = png.readUInt32BE(16)
+    const height = png.readUInt32BE(20)
+    expect(width).toBeGreaterThanOrEqual(512)
+    expect(height).toBeGreaterThanOrEqual(512)
+  })
 })
