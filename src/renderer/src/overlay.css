@@ -1,8 +1,12 @@
 :root {
-  --cream: #f0e6d0;
-  --gold: #d4af37;
-  --cyan: #3ee0e8;
-  --ink: #0b1020;
+  --ivory: #f4ebda;
+  --cream: #e4d5bc;
+  --gold: #c4a46a;
+  --gold-hi: #e6d3a3;
+  --cyan: #7eb8b4;
+  --cyan-hi: #b7e4e0;
+  --ink: #12110e;
+  --hairline: #c4a46a47;
 }
 html,
 body,
@@ -12,8 +16,8 @@ body,
   height: 100%;
   overflow: hidden;
   background: transparent;
-  font-family: "Segoe UI", "Trebuchet MS", sans-serif;
-  color: var(--cream);
+  font-family: "IBM Plex Sans", Inter, "Segoe UI", sans-serif;
+  color: var(--ivory);
   user-select: none;
 }
 #app {
@@ -40,8 +44,8 @@ body,
   width: 58%;
   height: 52%;
   z-index: 1;
-  background: rgba(8, 12, 24, 0.04);
-  box-shadow: inset 0 0 0 1px rgba(212, 175, 55, 0.12);
+  background: rgba(18, 17, 14, 0.04);
+  box-shadow: inset 0 0 0 1px var(--hairline);
   cursor: pointer;
   pointer-events: auto;
   -webkit-app-region: no-drag;
@@ -58,15 +62,19 @@ body.interactive .hit {
   left: auto;
   right: auto;
   bottom: auto;
-  margin: 0 14px 8px;
-  padding: 10px 12px;
-  background: rgba(11, 16, 32, 0.82);
-  border: 1px solid rgba(212, 175, 55, 0.55);
-  border-radius: 10px;
-  font-size: 13px;
-  line-height: 1.4;
-  max-height: 7.2em;
-  overflow: auto;
+  margin: 0 auto 16px;
+  padding: 6px 10px;
+  width: min(280px, calc(100% - 48px));
+  background: transparent;
+  border: 1px solid var(--hairline);
+  border-radius: 2px;
+  font-family: "Cormorant Garamond", "EB Garamond", Georgia, serif;
+  font-size: 15px;
+  line-height: 22px;
+  letter-spacing: 0.02em;
+  color: var(--ivory);
+  max-height: 3.6em;
+  overflow: hidden;
   pointer-events: auto;
   -webkit-app-region: no-drag;
 }
@@ -88,22 +96,36 @@ body.interactive .hit {
 }
 .chat input {
   flex: 1;
-  background: rgba(11, 16, 32, 0.88);
-  border: 1px solid var(--gold);
-  color: var(--cream);
-  border-radius: 8px;
+  background: transparent;
+  border: 1px solid var(--hairline);
+  color: var(--ivory);
+  border-radius: 4px;
   padding: 8px 10px;
   outline: none;
+  font-family: "Cormorant Garamond", "EB Garamond", Georgia, serif;
+  font-size: 15px;
+  font-style: italic;
+}
+.chat input::placeholder {
+  color: var(--ivory);
+  opacity: 0.4;
 }
 .chat button,
 .chrome button {
-  background: var(--gold);
-  color: var(--ink);
-  border: none;
-  border-radius: 8px;
+  background: transparent;
+  color: var(--gold-hi);
+  border: 1px solid var(--gold);
+  border-radius: 4px;
   padding: 8px 10px;
-  font-weight: 600;
+  font-weight: 500;
+  font-family: "IBM Plex Sans", Inter, "Segoe UI", sans-serif;
   cursor: pointer;
+}
+.chat button[type="submit"] {
+  background: var(--ivory);
+  color: var(--ink);
+  border-color: var(--ivory);
+  font-style: normal;
 }
 .chrome {
   position: absolute;

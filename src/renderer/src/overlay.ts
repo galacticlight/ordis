@@ -75,11 +75,23 @@ async function resumePlayback(): Promise<void> {
   if (ac.state === 'running' && !playing && playbackQueue.length > 0) pumpPlayback()
 }
 
+function sampleRms(samples: Float32Array): number {
+  const n = samples.length
+  if (n === 0) return 0
+  let acc = 0
+  for (let i = 0; i < n; i += 1) {
+    const v = samples[i] ?? 0
+    acc += v * v
+  }
+  return Math.sqrt(acc / n)
+}
+
 function enqueueVoice(sampleRate: number, pcm: Uint8Array): void {
   if (pcm.byteLength < 2 || sampleRate < 1) return
   const ac = audioContext()
   const samples = pcm16leToFloat32(pcm)
   if (samples.length === 0) return
+  scene.setVoiceAmp(sampleRms(samples))
   const buf = ac.createBuffer(1, samples.length, sampleRate)
   buf.getChannelData(0).set(samples)
   playbackQueue.push(buf)
