@@ -13,7 +13,7 @@ import {
   preceptsAreLoaded,
   statusLine
 } from '@shared/personality/engine'
-import { getPack } from '@shared/personality/pack'
+import { getPack, spokenFixtureLines } from '@shared/personality/pack'
 import { isClean } from '@shared/personality/traps'
 import { createMemory } from '@shared/memory/operatorMemory'
 
@@ -64,5 +64,13 @@ describe('in-product voice', () => {
     expect(messages[0]?.role).toBe('system')
     expect(messages[0]?.content).toContain(NORTH_STAR)
     expect(messages.at(-1)?.content).toBe('hello')
+  })
+})
+
+describe('spoken fixtures stay clean', () => {
+  it('YAML greetings, idle, fallbacks, few-shots, intents, and lore pass traps', () => {
+    for (const line of spokenFixtureLines()) {
+      expect(isClean(line)).toBe(true)
+    }
   })
 })

@@ -24,3 +24,5 @@ asar: true
 extraResources:
   - from: personality
     to: personality
+  - from: resources/icon.png
+    to: icon.png

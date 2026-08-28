@@ -42,6 +42,9 @@ resize()
 hit.addEventListener('mouseenter', () => {
   void window.ordis.setInteractive(true)
 })
+hit.addEventListener('click', () => {
+  void window.ordis.setInteractive(true)
+})
 form.addEventListener('submit', (event) => {
   event.preventDefault()
   const text = promptInput.value.trim()
