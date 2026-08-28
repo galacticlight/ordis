@@ -21,6 +21,14 @@ describe('overlay chrome on wake', () => {
     expect(html).not.toMatch(/id="chat"[^>]*hidden/)
   })
 
+  it('does not hang on empty Transmit', () => {
+    const overlay = readFileSync(join(root, 'src/renderer/src/overlay.ts'), 'utf8')
+    const main = readFileSync(join(root, 'src/main/index.ts'), 'utf8')
+    expect(overlay).toContain("Ordis is listening, Operator.")
+    expect(overlay).toMatch(/if \(!text\)/)
+    expect(main).toMatch(/if \(!trimmed\) \{/)
+  })
+
   it('wakes from hit, tray Interact, and Ctrl+Shift+O without Settings unlocking TTS', () => {
     const overlay = readFileSync(join(root, 'src/renderer/src/overlay.ts'), 'utf8')
     const main = readFileSync(join(root, 'src/main/index.ts'), 'utf8')

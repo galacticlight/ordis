@@ -163,7 +163,13 @@ document.documentElement.addEventListener('pointerleave', () => {
 form.addEventListener('submit', (event) => {
   event.preventDefault()
   const text = promptInput.value.trim()
-  if (!text) return
+  if (!text) {
+    scene.setStatus('idle')
+    if (caption.textContent === '…') {
+      setCaption('Ordis is listening, Operator.')
+    }
+    return
+  }
   promptInput.value = ''
   spoken = ''
   setCaption('…')

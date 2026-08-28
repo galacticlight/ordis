@@ -138,7 +138,10 @@ function persist(): void {
 function speak(text: string): void {
   if (!canSpeak(voiceGate) || !settings.voiceOutEnabled || !ttsAvailable()) return
   const trimmed = text.trim()
-  if (!trimmed) return
+  if (!trimmed) {
+    sendOverlay('ordis:status', 'idle')
+    return
+  }
   void enqueueSynthesize(trimmed).then((result) => {
     if (!result) return
     const pcm = Buffer.from(result.pcm.buffer, result.pcm.byteOffset, result.pcm.byteLength)
@@ -238,7 +241,10 @@ function openSettings(): void {
 
 async function runChat(text: string): Promise<void> {
   const trimmed = text.trim()
-  if (!trimmed) return
+  if (!trimmed) {
+    sendOverlay('ordis:status', 'idle')
+    return
+  }
   abort?.abort()
   abort = new AbortController()
   cancelTtsQueue()
