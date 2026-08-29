@@ -16,6 +16,7 @@ import { setKokoroCache, warmupKokoro } from './kokoro'
 import { canSpeak, consumeGreeting, createVoiceGate, unlock } from '../shared/audio/voiceGate'
 import { isHabitatRequestAllowed, overlayContentSecurityPolicy, type HabitatAllowOrigins } from '../shared/security/habitatRequest'
 import { isOverHit, isOverWindow } from '../shared/overlay/hitTest'
+import { resolvePreload } from './preloadPath'
 
 let overlay: BrowserWindow | null = null
 let settingsWin: BrowserWindow | null = null
@@ -86,7 +87,7 @@ function personalityDir(): string {
 }
 
 function preloadPath(): string {
-  return join(__dirname, '../preload/index.js')
+  return resolvePreload(join(__dirname, '../preload'))
 }
 
 function sendOverlay(channel: string, payload: unknown): void {
