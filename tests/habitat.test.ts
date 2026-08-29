@@ -59,6 +59,104 @@ describe('unharbored habitat tasks', () => {
     expect(reminder.tasks[1]?.dueAt).toBe(1_000 + 10 * 60_000)
   })
 
+  it('lists the foundry and cancels a named reminder with an empty api key', () => {
+    expect(emptyKey.apiKey).toBe('')
+    const memory = createMemory()
+    const pending: HabitatTask[] = [
+      { id: 'timer-1', kind: 'timer', dueAt: 5 * 60_000, prompt: '', createdAt: 0 },
+      { id: 'rem-1', kind: 'reminder', dueAt: 10 * 60_000, prompt: 'stretch', createdAt: 0 },
+      { id: 'rem-2', kind: 'reminder', dueAt: 15 * 60_000, prompt: 'tea', createdAt: 0 }
+    ]
+    const foundry = handleHabitatTurn({
+      text: "what's on the foundry",
+      memory,
+      tasks: pending,
+      now: 0
+    })
+    expect(foundry.handled).toBe(true)
+    expect(foundry.tasks).toHaveLength(3)
+    expect(foundry.reply).toMatch(/Operator/)
+    expect(foundry.reply).toMatch(/Ordis/)
+    expect(foundry.reply.toLowerCase()).toContain('foundry')
+    expect(foundry.reply.toLowerCase()).toContain('stretch')
+    expect(foundry.reply.toLowerCase()).toContain('tea')
+    expect(foundry.reply.toLowerCase()).toContain('timer')
+    expect(isClean(foundry.reply)).toBe(true)
+
+    const timers = handleHabitatTurn({
+      text: 'what timers',
+      memory,
+      tasks: pending,
+      now: 0
+    })
+    expect(timers.handled).toBe(true)
+    expect(timers.tasks).toHaveLength(3)
+    expect(timers.reply.toLowerCase()).toContain('timer')
+    expect(timers.reply.toLowerCase()).not.toContain('stretch')
+    expect(isClean(timers.reply)).toBe(true)
+
+    const reminders = handleHabitatTurn({
+      text: 'list reminders',
+      memory,
+      tasks: pending,
+      now: 0
+    })
+    expect(reminders.handled).toBe(true)
+    expect(reminders.reply.toLowerCase()).toContain('stretch')
+    expect(reminders.reply.toLowerCase()).toContain('tea')
+    expect(isClean(reminders.reply)).toBe(true)
+
+    const empty = handleHabitatTurn({
+      text: "what's on the foundry",
+      memory,
+      tasks: [],
+      now: 0
+    })
+    expect(empty.handled).toBe(true)
+    expect(empty.tasks).toHaveLength(0)
+    expect(empty.reply.toLowerCase()).toMatch(/quiet|no pending/)
+    expect(empty.reply).toMatch(/Operator/)
+    expect(isClean(empty.reply)).toBe(true)
+
+    const named = handleHabitatTurn({
+      text: 'cancel the stretch reminder',
+      memory,
+      tasks: pending,
+      now: 0
+    })
+    expect(named.handled).toBe(true)
+    expect(named.tasks.map((task) => task.id)).toEqual(['timer-1', 'rem-2'])
+    expect(named.reply).toMatch(/Operator/)
+    expect(named.reply.toLowerCase()).toContain('cancel')
+    expect(isClean(named.reply)).toBe(true)
+
+    const allTimers = handleHabitatTurn({
+      text: 'cancel all timers',
+      memory,
+      tasks: named.tasks,
+      now: 0
+    })
+    expect(allTimers.handled).toBe(true)
+    expect(allTimers.tasks).toEqual([{ id: 'rem-2', kind: 'reminder', dueAt: 15 * 60_000, prompt: 'tea', createdAt: 0 }])
+    expect(isClean(allTimers.reply)).toBe(true)
+
+    const yaml = readFileSync(join(root, 'personality/ordis.v1.yaml'), 'utf8')
+    expect(yaml).toMatch(/list_tasks/)
+    expect(yaml).toMatch(/on the foundry/)
+    expect(yaml).toMatch(/list what is on the foundry/)
+    expect(yaml).toMatch(/cancel a named one/)
+
+    const spelled = handleHabitatTurn({
+      text: 'what is on the foundry',
+      memory,
+      tasks: pending,
+      now: 0
+    })
+    expect(spelled.handled).toBe(true)
+    expect(spelled.reply.toLowerCase()).toContain('stretch')
+    expect(isClean(spelled.reply)).toBe(true)
+  })
+
   it('is wired in main before the Harbor apiKey check', () => {
     const main = readFileSync(join(root, 'src/main/index.ts'), 'utf8')
     const run = main.match(/async function runChat[\s\S]*?\nfunction trayIcon/)?.[0] ?? ''

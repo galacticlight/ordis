@@ -184,8 +184,19 @@ export function isDumpQuery(text: string): boolean {
   )
 }
 
+const BARE_CANCEL_RE =
+  /\b(?:cancel|never mind|nevermind)\s+(?:all\s+)?(?:the\s+)?(?:timer|reminder)s?\b/i
+const NAMED_CANCEL_RE =
+  /\b(?:cancel|never mind|nevermind)\s+(?:the\s+)?(?!all\b)(.+?)\s+(?:timer|reminder)s?\b/i
+
 export function isCancelQuery(text: string): boolean {
-  return /\b((?:cancel|never mind|nevermind)\s+(?:the\s+)?(?:timer|reminder)s?)\b/i.test(text)
+  return BARE_CANCEL_RE.test(text) || NAMED_CANCEL_RE.test(text)
+}
+
+export function isListQuery(text: string): boolean {
+  return /\b(?:what(?:['’]s| is) on the foundry|(?:what|list|show)\s+(?:the\s+)?(?:pending\s+)?(?:timer|reminder)s?)\b/i.test(
+    text
+  )
 }
 
 export function isRememberCommand(text: string): boolean {
@@ -194,7 +205,9 @@ export function isRememberCommand(text: string): boolean {
 }
 
 export function looksLikeSchedule(text: string): boolean {
-  if (isCancelQuery(text) || isRecallQuery(text) || isRememberCommand(text)) return false
+  if (isCancelQuery(text) || isListQuery(text) || isRecallQuery(text) || isRememberCommand(text)) {
+    return false
+  }
   if (/\b((?:set\s+(?:a\s+)?)?(?:timer|reminder)|remind me)\b/i.test(text)) return true
   const trimmed = text.trim()
   if (/^(?:please\s+)?in\s+\d+/i.test(trimmed)) return true
@@ -319,6 +332,64 @@ function cancelKind(text: string): HabitatTaskKind | undefined {
   return undefined
 }
 
+function wantsCancelAll(text: string): boolean {
+  return /\b(?:cancel|never mind|nevermind)\s+all\b/i.test(text)
+}
+
+function cancelName(text: string): string | undefined {
+  const named = NAMED_CANCEL_RE.exec(text)
+  if (!named?.[1]) return undefined
+  const needle = clean(named[1]).replace(/^(?:the|a|an|my|this|that)\s+/i, '')
+  if (!needle || /^(?:all|the|a|an|my|this|that)$/i.test(needle)) return undefined
+  return needle.toLowerCase()
+}
+
+function joinEnglish(parts: string[]): string {
+  if (parts.length === 0) return ''
+  if (parts.length === 1) return parts[0] ?? ''
+  if (parts.length === 2) return `${parts[0]} and ${parts[1]}`
+  return `${parts.slice(0, -1).join(', ')}, and ${parts[parts.length - 1]}`
+}
+
+function formatPendingLine(task: HabitatTask, now: number): string {
+  const when = formatWhen(task.dueAt, now)
+  if (task.kind === 'timer') {
+    return task.prompt ? `a timer to ${task.prompt} ${when}` : `a timer ${when}`
+  }
+  if (task.prompt) return `a reminder to ${task.prompt} ${when}`
+  return `a reminder ${when}`
+}
+
+export function formatFoundryReply(
+  tasks: HabitatTask[],
+  now: number,
+  kind?: HabitatTaskKind
+): string {
+  const pending = tasks.filter((task) => !kind || task.kind === kind).sort((a, b) => a.dueAt - b.dueAt)
+  if (pending.length === 0) {
+    if (kind === 'timer') return 'The foundry holds no pending timers, Operator. Ordis is listening.'
+    if (kind === 'reminder') return 'The foundry holds no pending reminders, Operator. Ordis is listening.'
+    return 'The foundry is quiet, Operator. Ordis holds no pending timers or reminders.'
+  }
+  return `Operator, on the foundry Ordis holds ${joinEnglish(pending.map((task) => formatPendingLine(task, now)))}.`
+}
+
+function cancelMissReply(kind: HabitatTaskKind | undefined, name: string | undefined): string {
+  if (name && kind) return `There is no pending ${name} ${kind} to cancel, Operator.`
+  if (name) return `There is no pending ${name} timer or reminder to cancel, Operator.`
+  const label = kind ?? 'timer or reminder'
+  return `There is no pending ${label} to cancel, Operator.`
+}
+
+function cancelAllReply(kind: HabitatTaskKind | undefined, count: number): string {
+  if (count === 1) {
+    const label = kind ?? 'timer or reminder'
+    return `Cancelled, Operator. Ordis has released that ${label}.`
+  }
+  if (kind) return `Cancelled, Operator. Ordis has released those ${kind}s.`
+  return 'Cancelled, Operator. Ordis has released those timers and reminders.'
+}
+
 function confirmRemember(before: OperatorMemory, after: OperatorMemory): string {
   const likes = after.likes.filter((value) => !before.likes.includes(value))
   if (likes.length > 0) {
@@ -340,22 +411,45 @@ export function handleHabitatTurn(input: HabitatTurnInput): HabitatTurn {
 
   if (isCancelQuery(text)) {
     const kind = cancelKind(text)
-    const matches = tasks.filter((task) => !kind || task.kind === kind).sort((a, b) => a.dueAt - b.dueAt)
-    const target = matches[0]
-    if (!target) {
-      const label = kind ?? 'timer or reminder'
+    const needle = cancelName(text)
+    const pool = tasks.filter((task) => !kind || task.kind === kind)
+    const matches = (
+      needle
+        ? pool.filter((task) => task.prompt.toLowerCase().includes(needle))
+        : pool
+    ).sort((a, b) => a.dueAt - b.dueAt)
+    if (matches.length === 0) {
       return {
         handled: true,
         memory,
         tasks,
-        reply: `There is no pending ${label} to cancel, Operator.`
+        reply: cancelMissReply(kind, needle)
       }
     }
+    if (wantsCancelAll(text)) {
+      const ids = new Set(matches.map((task) => task.id))
+      return {
+        handled: true,
+        memory,
+        tasks: tasks.filter((task) => !ids.has(task.id)),
+        reply: cancelAllReply(kind, matches.length)
+      }
+    }
+    const target = matches[0]
     return {
       handled: true,
       memory,
       tasks: tasks.filter((task) => task.id !== target.id),
       reply: `Cancelled, Operator. Ordis has released that ${target.kind}.`
+    }
+  }
+
+  if (isListQuery(text)) {
+    return {
+      handled: true,
+      memory,
+      tasks,
+      reply: formatFoundryReply(tasks, now, cancelKind(text))
     }
   }
 

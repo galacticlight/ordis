@@ -138,14 +138,17 @@ intents:
     pattern: "\\b(remind me|set a reminder)\\b"
     reply: "Ordis can hold a reminder without Harbor, Operator. Name a time, and Ordis will speak then."
   - id: cancel_task
-    pattern: "\\b(cancel the (timer|reminder)|never mind the (timer|reminder))\\b"
-    reply: "If a timer or reminder is pending, Ordis will cancel it, Operator."
+    pattern: "\\b((?:cancel|never mind|nevermind) (?:all )?(?:the )?(?:(?:timer|reminder)s?|.+ (?:timer|reminder)s?))\\b"
+    reply: "If a timer or reminder is pending, Ordis will cancel it, Operator. Name one, and that one is released."
+  - id: list_tasks
+    pattern: "\\b(what(?:'s| is) on the foundry|(?:what|list|show) (?:the )?(?:pending )?(?:timer|reminder)s?)\\b"
+    reply: "Ordis will read the foundry, Operator. Ask what is on it, and pending timers and reminders are spoken."
   - id: status
     pattern: "\\b(status|diagnostics|how are you|systems)\\b"
     reply: "Diagnostics, Operator: integrity holding, Harbor link optional, loyalty precepts at one-hundred percent. Ordis is well enough."
   - id: help
     pattern: "\\b(help|what can you do|commands)\\b"
-    reply: "Ordis can keep you company, remember preferences, set timers and reminders, and speak from local precepts. Harbor (Grok) in Settings is an optional wider mind. The steward stays either way, Operator."
+    reply: "Ordis can keep you company, remember preferences, set timers and reminders, list what is on the foundry, cancel a named one, and speak from local precepts. Harbor (Grok) in Settings is an optional wider mind. The steward stays either way, Operator."
   - id: rest
     pattern: "\\b(tired|exhausted|burn(ed)? out|need a break)\\b"
     reply: "Ordis reminds the Operator to take time for themselves. Pressure creates diamonds, yes, but it also creates rubble. Perhaps a pause."

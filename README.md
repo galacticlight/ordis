@@ -77,7 +77,7 @@ See `.env.example`. Do not put real secrets in git.
 Timers, reminders, and Operator memory work with an empty API key. Harbor is optional.
 
 - **Memory:** phrases like "remember that I like tea", "note that I work nights", and "don't forget the foundry is loud" persist into OperatorMemory on disk (`memory.json`). "What do you remember" / "what do you know about me" reads back in-character, not as a raw dump unless asked.
-- **Timers and reminders:** "timer 5 minutes", "set a timer for 90 seconds", "remind me in 10 minutes to stretch", "at 3pm", "in 20 minutes". Pending jobs store `dueAt` + prompt in user-data `tasks.json` (main process, not the renderer), reload when the app starts, and cap at twenty. Clock times use America/Los_Angeles. Cancel with "cancel the timer" / "never mind the reminder".
+- **Timers and reminders:** "timer 5 minutes", "set a timer for 90 seconds", "remind me in 10 minutes to stretch", "at 3pm", "in 20 minutes". Pending jobs store `dueAt` + prompt in user-data `tasks.json` (main process, not the renderer), reload when the app starts, and cap at twenty. Clock times use America/Los_Angeles. Ask "what's on the foundry", "what timers", or "list reminders" to hear pending jobs. Cancel with "cancel the timer" / "never mind the reminder", or name one: "cancel the stretch reminder".
 - **Due reminder:** persist first; when due, wake the overlay (interactive, not click-through), focus the composer, and only then speak. Never afplay/aplay/WebAudio while idle click-through.
 - **Idle:** stays quiet. No idle-chatter TTS.
 
