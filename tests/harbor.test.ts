@@ -145,6 +145,8 @@ describe('packaged voice extras', () => {
     expect(ci).toContain('vendorVoiceExtras.cjs')
     const vendor = readFileSync(join(root, 'scripts/vendorVoiceExtras.cjs'), 'utf8')
     expect(vendor).toContain('new URL(res.headers.location, current)')
+    expect(vendor).toContain('copyUserOwned')
+    expect(vendor).toContain('/bin/cp')
     const vendorIdx = ci.indexOf('vendorVoiceExtras.cjs')
     const packIdx = ci.indexOf('npx electron-builder --mac dir --arm64')
     expect(vendorIdx).toBeGreaterThan(0)

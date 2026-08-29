@@ -8,8 +8,6 @@
 const { execFileSync, spawnSync } = require("node:child_process")
 const {
   chmodSync,
-  copyFileSync,
-  cpSync,
   createWriteStream,
   existsSync,
   mkdirSync,
@@ -43,6 +41,16 @@ function log(message) {
 
 function ensureDir(dir) {
   mkdirSync(dir, { recursive: true })
+}
+
+function copyUserOwned(src, dest) {
+  ensureDir(dirname(dest))
+  execFileSync("/bin/cp", ["-f", src, dest])
+  try {
+    chmodSync(dest, 0o755)
+  } catch {
+    // dest may be data, not a binary
+  }
 }
 
 function download(url, dest) {
@@ -159,8 +167,8 @@ function copyDataDir(src, dest) {
   if (!existsSync(src)) {
     throw new Error(`espeak-ng data missing: ${src}`)
   }
-  ensureDir(dirname(dest))
-  cpSync(src, dest, { recursive: true })
+  ensureDir(dest)
+  execFileSync("/bin/cp", ["-R", src + "/.", dest])
 }
 
 function vendorMacEspeak() {
@@ -187,10 +195,10 @@ function vendorMacEspeak() {
   ensureDir(binDir)
   ensureDir(libDir)
   const destBin = join(binDir, "espeak-ng")
-  copyFileSync(src, destBin)
+  copyUserOwned(src, destBin)
   chmodSync(destBin, 0o755)
   for (const lib of collectMacDylibs(src)) {
-    copyFileSync(lib, join(libDir, basename(lib)))
+    copyUserOwned(lib, join(libDir, basename(lib)))
   }
   rewriteMacNames(destBin, libDir)
   const dataSrc = prefix
@@ -215,7 +223,7 @@ function vendorLinuxEspeak() {
   ensureDir(binDir)
   ensureDir(libDir)
   const destBin = join(binDir, "espeak-ng")
-  copyFileSync(src, destBin)
+  copyUserOwned(src, destBin)
   chmodSync(destBin, 0o755)
   const ldd = spawnSync("ldd", [src], { encoding: "utf8" })
   for (const line of (ldd.stdout ?? "").split("\n")) {
@@ -224,7 +232,7 @@ function vendorLinuxEspeak() {
     const lib = match[1]
     if (!lib || !existsSync(lib)) continue
     if (lib.includes("libespeak") || lib.includes("pcaudio") || lib.includes("sonic")) {
-      copyFileSync(lib, join(libDir, basename(lib)))
+      copyUserOwned(lib, join(libDir, basename(lib)))
     }
   }
   const dataCandidates = ["/usr/share/espeak-ng-data", "/usr/local/share/espeak-ng-data"]
