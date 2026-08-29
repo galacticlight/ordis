@@ -19,6 +19,10 @@ mac:
         - arm64
   category: public.app-category.utilities
   identity: null
+  extendInfo:
+    NSAppTransportSecurity:
+      NSAllowsArbitraryLoads: false
+      NSAllowsLocalNetworking: true
 win:
   target:
     - dir

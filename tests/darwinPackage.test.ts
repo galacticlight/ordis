@@ -18,6 +18,9 @@ describe("darwin-arm64 package job", () => {
     expect(builder).toContain("arm64")
     expect(builder).toMatch(/identity:\s*null/)
     expect(pkg).toContain("package:darwin-arm64")
+    expect(builder).toMatch(/NSAllowsArbitraryLoads:\s*false/)
+    expect(builder).toMatch(/NSAllowsLocalNetworking:\s*true/)
+    expect(builder).not.toMatch(/NSAllowsArbitraryLoads:\s*true/)
   })
 
   it("ships a 512px-or-larger icon.png for electron-builder mac", () => {

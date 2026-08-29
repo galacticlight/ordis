@@ -60,3 +60,14 @@ describe('settings checkboxes', () => {
     expect(html).toMatch(/id="voiceOutEnabled"[^>]*checked/)
   })
 })
+
+describe('idle hit target', () => {
+  it('does not paint a gold rect around the cube', () => {
+    const css = readFileSync(join(root, 'src/renderer/src/overlay.css'), 'utf8')
+    const hit = css.match(/\.hit \{[\s\S]*?\n\}/)?.[0]
+    expect(hit).toBeTruthy()
+    expect(hit).not.toMatch(/box-shadow/)
+    expect(hit).not.toMatch(/--hairline/)
+    expect(hit).toMatch(/background:\s*transparent/)
+  })
+})
