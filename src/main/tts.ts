@@ -2,6 +2,7 @@ import { spawn, spawnSync, type ChildProcess } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { DEFAULT_RADIO, modulateRadio } from '../shared/audio/radioFilter'
 import { float32ToInt16, int16ToFloat32, parsePcm16Wav } from '../shared/audio/wav'
+import { kokoroReady, synthesizeKokoro, warmupKokoro } from './kokoro'
 
 const ESPEAK_ARGS = ['-v', 'en+m3', '-s', '138', '-p', '38', '--stdout', '--'] as const
 const SPAWN_TIMEOUT_MS = 20_000
@@ -52,7 +53,7 @@ function espeakBin(): string | null {
 }
 
 export function ttsAvailable(): boolean {
-  return espeakBin() !== null
+  return kokoroReady() || espeakBin() !== null
 }
 
 export function cancelTtsQueue(): void {
@@ -115,6 +116,11 @@ function captureStdout(text: string, bin: string): Promise<Buffer | null> {
 export async function synthesizeRadio(text: string): Promise<TtsResult | null> {
   const trimmed = text.trim()
   if (!trimmed) return null
+  warmupKokoro()
+  if (kokoroReady()) {
+    const neural = await synthesizeKokoro(trimmed)
+    if (neural) return neural
+  }
   const bin = espeakBin()
   if (!bin) return null
   try {

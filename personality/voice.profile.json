@@ -1,5 +1,7 @@
 {
-  "speaker": "generic-warm-tenor",
+  "speaker": "kokoro-am_michael",
+  "voices": ["am_michael", "am_puck"],
+  "license": "Apache-2.0 Kokoro-82M, owned weights only",
   "rate": 1.0,
   "pitch": 1.0,
   "radio_filter": {

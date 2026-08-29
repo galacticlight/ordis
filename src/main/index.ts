@@ -12,6 +12,7 @@ import { health, streamChatCompletion, LlmError } from '../shared/llm/provider'
 import { loadMemory, loadSettings, saveMemory, saveSettings, toPublicSettings } from './store'
 import { PlaintextKeyRefused } from '../shared/secrets'
 import { cancelTtsQueue, enqueueSynthesize, ttsAvailable } from './tts'
+import { setKokoroCache, warmupKokoro } from './kokoro'
 import { canSpeak, consumeGreeting, createVoiceGate, unlock } from '../shared/audio/voiceGate'
 import { isHabitatRequestAllowed, overlayContentSecurityPolicy, type HabitatAllowOrigins } from '../shared/security/habitatRequest'
 import { isOverHit, isOverWindow } from '../shared/overlay/hitTest'
@@ -415,6 +416,8 @@ if (!gotLock) {
     loadPersonalityPack(personalityDir())
     settings = loadSettings()
     memory = loadMemory()
+    setKokoroCache(join(app.getPath('userData'), 'kokoro'))
+    warmupKokoro()
     registerIpc()
     Menu.setApplicationMenu(null)
     overlay = createOverlay()

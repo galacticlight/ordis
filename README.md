@@ -62,11 +62,11 @@ See `.env.example`. Do not put real secrets in git.
 | Local Operator memory | `src/shared/memory/operatorMemory.ts` |
 | Status: idle / listening / thinking / speaking | overlay caption + eye pulse |
 | Settings for keys; offline fallback lines | Settings panel; `fallbacks.ts` |
-| On-device radio vocalizer (voice out) | espeak-ng + shared radio filter; Settings checkbox, default on |
+| On-device radio vocalizer (voice out) | Kokoro am_michael (Apache) + radio filter; espeak-ng fallback |
 
 ### Voice path
 
-- **Out:** on-device `espeak-ng` (generic warm tenor) plus a light radio filter in the main process. Enable *Radio vocalizer (on-device)* in Settings (default on). Guarded sentences play through Web Audio in the overlay. If `espeak-ng` is missing, captions still work and speech stays silent.
+- **Out:** on-device Kokoro `am_michael` (Apache-2.0 weights, cached in user-data) plus the radio filter. First launch may fetch the 82M ONNX. `am_puck` is the owned alternate. espeak-ng stays as fallback. No Digital Extremes audio.
 - **In:** still dark. No mic, no Web Speech, no browser `speechSynthesis` stub. On-device STT can replace this later without touching the personality engine.
 - Linux: `sudo apt install espeak-ng`. The rest of the stack is Electron (Chromium), so the overlay does not need WebKitGTK.
 
