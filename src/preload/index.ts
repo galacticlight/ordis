@@ -16,7 +16,7 @@ export interface OrdisBridge {
   onGreeting: (cb: (text: string) => void) => () => void
   onInteractive: (cb: (next: boolean) => void) => () => void
   onCaptions: (cb: (enabled: boolean) => void) => () => void
-  onVoice: (cb: (payload: { sampleRate: number; pcm: Uint8Array }) => void) => () => void
+  onVoice: (cb: (payload: { sampleRate: number; pcm: Uint8Array; speakers?: boolean }) => void) => () => void
 }
 
 function subscribe<T>(channel: string, cb: (payload: T) => void): () => void {

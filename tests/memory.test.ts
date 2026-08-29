@@ -35,3 +35,15 @@ describe('operator memory', () => {
     expect(summarizeMemory(memory)).toContain('1 habitat notes')
   })
 })
+
+describe('habitat remember phrases', () => {
+  it('parses tea, night work, and foundry notes', () => {
+    let memory = createMemory()
+    memory = ingestOperatorUtterance(memory, 'remember that I like tea')
+    memory = ingestOperatorUtterance(memory, 'note that I work nights')
+    memory = ingestOperatorUtterance(memory, "don't forget the foundry is loud")
+    expect(memory.likes).toContain('tea')
+    expect(memory.facts.work).toBe('nights')
+    expect(memory.notes.some((note) => /foundry is loud/.test(note))).toBe(true)
+  })
+})

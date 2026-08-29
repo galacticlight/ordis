@@ -63,15 +63,23 @@ function pumpPlayback(): void {
   src.start()
 }
 
+let resumeMissLogged = false
+
 async function resumePlayback(): Promise<void> {
   const ac = audioContext()
   if (ac.state === 'suspended') {
     try {
       await ac.resume()
-    } catch {
-      return
+    } catch (error) {
+      console.error('Ordis overlay AudioContext resume failed', error)
+    }
+    const after = ac.state as string
+    if (after !== 'running' && !resumeMissLogged) {
+      resumeMissLogged = true
+      console.error(`Ordis overlay AudioContext still ${after}; renderer speakers may be silent`)
     }
   }
+  if (ac.state === 'running') resumeMissLogged = false
   if (ac.state === 'running' && !playing && playbackQueue.length > 0) pumpPlayback()
 }
 
@@ -86,12 +94,14 @@ function sampleRms(samples: Float32Array): number {
   return Math.sqrt(acc / n)
 }
 
-function enqueueVoice(sampleRate: number, pcm: Uint8Array): void {
+function enqueueVoice(sampleRate: number, pcm: Uint8Array, speakers = false): void {
   if (pcm.byteLength < 2 || sampleRate < 1) return
-  const ac = audioContext()
   const samples = pcm16leToFloat32(pcm)
   if (samples.length === 0) return
   scene.setVoiceAmp(sampleRms(samples))
+  void resumePlayback()
+  if (speakers) return
+  const ac = audioContext()
   const buf = ac.createBuffer(1, samples.length, sampleRate)
   buf.getChannelData(0).set(samples)
   playbackQueue.push(buf)
@@ -155,6 +165,12 @@ function tuck(): void {
   void window.ordis.setInteractive(false)
 }
 
+window.addEventListener('keydown', () => {
+  void resumePlayback()
+})
+window.addEventListener('pointerdown', () => {
+  void resumePlayback()
+})
 window.addEventListener('resize', resize)
 new ResizeObserver(resize).observe(canvas)
 resize()
@@ -219,7 +235,7 @@ window.ordis.onInteractive((next) => {
 })
 window.ordis.onVoice((payload) => {
   const pcm = payload.pcm instanceof Uint8Array ? payload.pcm : new Uint8Array(payload.pcm)
-  enqueueVoice(payload.sampleRate, pcm)
+  enqueueVoice(payload.sampleRate, pcm, Boolean(payload.speakers))
 })
 window.ordis.onCaptions((enabled) => {
   captionsEnabled = enabled

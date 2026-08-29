@@ -23,7 +23,7 @@ cp .env.example .env   # optional; Settings in the app is the supported key stor
 npm run dev
 ```
 
-The overlay appears at the bottom-right: frameless, transparent, always-on-top, idle click-through; hover the Sentinel to speak. Type to the Operator composer. Ordis is offline-first: without an API key, he still greets, speaks locally, uses on-disk Operator memory, and answers from YAML personality precepts.
+The overlay appears at the bottom-right: frameless, transparent, always-on-top, idle click-through; hover the Sentinel to speak. Type to the Operator composer. Ordis is offline-first: without an API key, he still greets, speaks locally (main-process `afplay`/`aplay`/`paplay`), uses on-disk Operator memory, sets timers and reminders, and answers from YAML personality precepts.
 
 ### Production build
 
@@ -60,6 +60,7 @@ See `.env.example`. Do not put real secrets in git.
 | Streaming chat (live tokens; unharbored word-stream) | `src/shared/llm/openaiCompatible.ts`, main chat loop |
 | Personality pack (YAML precepts, not a generic bot) | `src/shared/personality/*` |
 | Local Operator memory | `src/shared/memory/operatorMemory.ts` |
+| Unharbored timers, reminders, memory | `src/shared/habitat/tasks.ts`, `memory.json` / `tasks.json` |
 | Status: idle / listening / thinking / speaking | overlay caption + eye pulse |
 | Settings for keys; unharbored local precepts | Settings panel; `fallbacks.ts` |
 | On-device radio vocalizer (voice out) | Packaged Kokoro q8 am_michael + radio filter; espeak-ng fallback |
@@ -67,10 +68,21 @@ See `.env.example`. Do not put real secrets in git.
 ### Voice path
 
 - **Out:** on-device Kokoro `am_michael` (Apache-2.0 q8 ONNX, voices `am_michael` / `am_puck` only) plus the radio filter. Packaged builds vendor the q8 weights and espeak-ng via `scripts/vendorVoiceExtras.cjs` into extraResources, so Ordis.app speaks without Homebrew and without a first-run model download. `am_puck` is the owned alternate. espeak-ng stays as fallback. No Digital Extremes audio.
+- **Playback:** synthesis stays in the main process. Audible output does not depend on renderer Autoplay (the overlay is often click-through, so a hover wake is not a user gesture and `AudioContext.resume()` can no-op). After the existing hover/click voice gate, main writes a short wav under userData and plays it with `afplay` on macOS or `paplay`/`aplay` on Linux. The overlay still resumes Web Audio on wake, hover, click, and keydown so the mercury core can pulse (`setVoiceAmp`). Playback misses log with `console.error`.
 - **In:** still dark. No mic, no Web Speech, no browser `speechSynthesis` stub. On-device STT can replace this later without touching the personality engine.
 - Dev extras: run the vendor:voice script. Unpackaged Linux can use distro espeak-ng. The rest of the stack is Electron (Chromium), so the overlay does not need WebKitGTK.
 
+### Unharbored habitat tasks
+
+Timers, reminders, and Operator memory work with an empty API key. Harbor is optional.
+
+- **Memory:** phrases like "remember that I like tea", "note that I work nights", and "don't forget the foundry is loud" persist into OperatorMemory on disk (`memory.json`). "What do you remember" / "what do you know about me" reads back in-character, not as a raw dump unless asked.
+- **Timers and reminders:** "timer 5 minutes", "set a timer for 90 seconds", "remind me in 10 minutes to stretch", "at 3pm", "in 20 minutes". Pending jobs store `dueAt` + prompt in user-data `tasks.json` (main process, not the renderer), reload when the app starts, and cap at twenty. Clock times use America/Los_Angeles. Cancel with "cancel the timer" / "never mind the reminder".
+- **Due reminder:** persist first; when due, wake the overlay (interactive, not click-through), focus the composer, and only then speak. Never afplay/aplay/WebAudio while idle click-through.
+- **Idle:** stays quiet. No idle-chatter TTS.
+
 ## Architecture
+
 
 ```
 src/
@@ -81,6 +93,7 @@ src/
     personality/  pack loader, precepts, idle, offline lines, engine, traps
     llm/          OpenAI-compatible SSE client
     memory/       Operator preferences
+    habitat/      unharbored timers, reminders, memory turns
     audio/        WAV PCM helpers + radio filter
     types.ts
 tests/            vitest — traps, loyalty, precepts, memory, SSE parser, radio DSP

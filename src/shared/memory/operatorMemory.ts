@@ -3,7 +3,7 @@ import { DEFAULT_MEMORY, type OperatorMemory } from '../types'
 const REMEMBER_PATTERNS: { test: RegExp; apply: (memory: OperatorMemory, match: RegExpExecArray) => void }[] =
   [
     {
-      test: /\b(?:remember that )?i (?:like|love|enjoy) ([^.!?]+)/i,
+      test: /\b(?:remember that |note that )?i (?:like|love|enjoy) ([^.!?]+)/i,
       apply: (memory, match) => {
         const value = clean(match[1])
         if (value && !memory.likes.includes(value)) {
@@ -12,7 +12,7 @@ const REMEMBER_PATTERNS: { test: RegExp; apply: (memory: OperatorMemory, match: 
       }
     },
     {
-      test: /\b(?:remember that )?i (?:dislike|hate|can'?t stand) ([^.!?]+)/i,
+      test: /\b(?:remember that |note that )?i (?:dislike|hate|can'?t stand) ([^.!?]+)/i,
       apply: (memory, match) => {
         const value = clean(match[1])
         if (value && !memory.dislikes.includes(value)) {
@@ -21,7 +21,14 @@ const REMEMBER_PATTERNS: { test: RegExp; apply: (memory: OperatorMemory, match: 
       }
     },
     {
-      test: /\b(?:remember(?: this| that)?[:\s]+)(.+)/i,
+      test: /\b(?:note that |remember that )?i work ([^.!?]+)/i,
+      apply: (memory, match) => {
+        const value = clean(match[1])
+        if (value) memory.facts.work = value
+      }
+    },
+    {
+      test: /\b(?:note that|don'?t forget(?: that)?|remember(?: this| that)?)[:\s]+(.+)/i,
       apply: (memory, match) => {
         const value = clean(match[1])
         if (value && !memory.notes.includes(value)) {
@@ -66,11 +73,13 @@ export function rememberNote(memory: OperatorMemory, note: string): OperatorMemo
 }
 
 export function ingestOperatorUtterance(memory: OperatorMemory, text: string): OperatorMemory {
+  if (isRecallQuery(text)) return memory
   const next = createMemory(memory)
   for (const pattern of REMEMBER_PATTERNS) {
     const match = pattern.test.exec(text)
     if (match) {
       pattern.apply(next, match)
+      break
     }
   }
   next.updatedAt = Date.now()
@@ -89,4 +98,47 @@ export function summarizeMemory(memory: OperatorMemory): string {
     bits.push(`${memory.notes.length} habitat notes`)
   }
   return bits.join(' · ')
+}
+
+export function isRecallQuery(text: string): boolean {
+  return /\b(what do you remember|what have you (?:stored|remembered)|what do you know about me)\b/i.test(
+    text
+  )
+}
+
+export function memoryChanged(before: OperatorMemory, after: OperatorMemory): boolean {
+  return (
+    before.likes.join('\0') !== after.likes.join('\0') ||
+    before.dislikes.join('\0') !== after.dislikes.join('\0') ||
+    before.notes.join('\0') !== after.notes.join('\0') ||
+    JSON.stringify(before.facts) !== JSON.stringify(after.facts)
+  )
+}
+
+export function recallReply(memory: OperatorMemory): string {
+  const bits: string[] = []
+  if (memory.likes.length > 0) {
+    bits.push(`you like ${memory.likes.join(', ')}`)
+  }
+  if (memory.dislikes.length > 0) {
+    bits.push(`you dislike ${memory.dislikes.join(', ')}`)
+  }
+  if (memory.notes.length > 0) {
+    bits.push(memory.notes.join('; '))
+  }
+  const facts = Object.entries(memory.facts)
+  if (facts.length > 0) {
+    bits.push(facts.map(([key, value]) => `${key} is ${value}`).join('; '))
+  }
+  if (bits.length === 0) {
+    return 'Ordis has no habitat notes yet, Operator. Speak a preference, and it will be kept.'
+  }
+  return `Operator, Ordis remembers ${bits.join('; ')}. Wonderful.`
+}
+
+export function recallSpeech(memory: OperatorMemory, dump = false): string {
+  if (dump && (memory.notes.length > 0 || Object.keys(memory.facts).length > 0 || memory.likes.length > 0)) {
+    return recallReply(memory)
+  }
+  return recallReply(memory)
 }

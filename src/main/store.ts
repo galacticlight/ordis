@@ -9,6 +9,7 @@ import {
   type OperatorMemory,
   type PublicSettings
 } from '../shared/types'
+import { normalizeTasks, type HabitatTask } from '../shared/habitat/tasks'
 
 function dir(): string {
   const d = app.getPath('userData')
@@ -26,6 +27,10 @@ function secretsFile(): string {
 
 function memoryFile(): string {
   return join(dir(), 'memory.json')
+}
+
+function tasksFile(): string {
+  return join(dir(), 'tasks.json')
 }
 
 function electronSecretBox(): SecretBox {
@@ -130,4 +135,27 @@ export function loadMemory(): OperatorMemory {
 
 export function saveMemory(memory: OperatorMemory): void {
   writeFileSync(memoryFile(), JSON.stringify(memory, null, 2), 'utf8')
+}
+
+function parseTaskDisk(raw: unknown): HabitatTask[] {
+  if (Array.isArray(raw)) return normalizeTasks(raw)
+  if (raw && typeof raw === 'object') {
+    const rec = raw as { tasks?: unknown; timers?: unknown }
+    if (Array.isArray(rec.tasks)) return normalizeTasks(rec.tasks)
+    if (Array.isArray(rec.timers)) return normalizeTasks(rec.timers)
+  }
+  return []
+}
+
+export function loadTasks(): HabitatTask[] {
+  if (!existsSync(tasksFile())) return []
+  try {
+    return parseTaskDisk(JSON.parse(readFileSync(tasksFile(), 'utf8')) as unknown)
+  } catch {
+    return []
+  }
+}
+
+export function saveTasks(tasks: HabitatTask[]): void {
+  writeFileSync(tasksFile(), JSON.stringify(tasks, null, 2), 'utf8')
 }

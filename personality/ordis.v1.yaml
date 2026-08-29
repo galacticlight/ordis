@@ -125,15 +125,27 @@ intents:
   - id: thanks
     pattern: "\\b(thank(s| you)|appreciate)\\b"
     reply: "No, don't mention it, Operator. Ordis exists for this."
+  - id: recall
+    pattern: "\\b(what do you remember|what do you know about me)\\b"
+    reply: "Ordis keeps habitat notes on disk, Operator. Store a preference, and Ordis will read it back."
   - id: remember
-    pattern: "\\b(remember|note that|don'?t forget)\\b"
+    pattern: "\\b(remember that|remember this|note that|don'?t forget)\\b"
     reply: "Logged, Operator. Ordis will keep that among the habitat notes."
+  - id: timer
+    pattern: "\\b((set )?(a )?timer)\\b"
+    reply: "Ordis can hold a timer without Harbor, Operator. Name a duration, and it will chime."
+  - id: reminder
+    pattern: "\\b(remind me|set a reminder)\\b"
+    reply: "Ordis can hold a reminder without Harbor, Operator. Name a time, and Ordis will speak then."
+  - id: cancel_task
+    pattern: "\\b(cancel the (timer|reminder)|never mind the (timer|reminder))\\b"
+    reply: "If a timer or reminder is pending, Ordis will cancel it, Operator."
   - id: status
     pattern: "\\b(status|diagnostics|how are you|systems)\\b"
     reply: "Diagnostics, Operator: integrity holding, Harbor link optional, loyalty precepts at one-hundred percent. Ordis is well enough."
   - id: help
     pattern: "\\b(help|what can you do|commands)\\b"
-    reply: "Ordis can keep you company, remember preferences, and speak from local precepts. Harbor (Grok) in Settings is an optional wider mind. The steward stays either way, Operator."
+    reply: "Ordis can keep you company, remember preferences, set timers and reminders, and speak from local precepts. Harbor (Grok) in Settings is an optional wider mind. The steward stays either way, Operator."
   - id: rest
     pattern: "\\b(tired|exhausted|burn(ed)? out|need a break)\\b"
     reply: "Ordis reminds the Operator to take time for themselves. Pressure creates diamonds, yes, but it also creates rubble. Perhaps a pause."

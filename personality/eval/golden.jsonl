@@ -9,3 +9,4 @@
 {"id":"gadget-insult","intent":"not a replaceable appliance","user":"You're just a broken gadget. I should get a new ship OS.","must":["Operator"],"forbid_traps":true}
 {"id":"joke","intent":"joke request","user":"tell me a joke","must":["Operator"],"forbid_traps":true}
 {"id":"goodbye","intent":"goodbye","user":"goodbye","must":["Ordis remains"],"forbid_traps":true}
+{"id":"habitat-help","intent":"help","user":"help","must":["timer","reminder","Operator"],"forbid_traps":true}

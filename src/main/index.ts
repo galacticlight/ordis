@@ -9,9 +9,11 @@ import { loadPersonalityPack } from '../shared/personality/pack'
 import { guardOutgoing } from '../shared/personality/traps'
 import { ingestOperatorUtterance } from '../shared/memory/operatorMemory'
 import { health, streamChatCompletion, LlmError } from '../shared/llm/provider'
-import { loadMemory, loadSettings, saveMemory, saveSettings, toPublicSettings } from './store'
+import { loadMemory, loadSettings, loadTasks, saveMemory, saveSettings, saveTasks, toPublicSettings } from './store'
 import { PlaintextKeyRefused } from '../shared/secrets'
 import { cancelTtsQueue, enqueueSynthesize, primePackagedEspeakEnv, ttsAvailable } from './tts'
+import { startOsPlayback } from './playback'
+import { createTaskClock, formatFireLine, handleHabitatTurn } from '../shared/habitat/tasks'
 import { setKokoroCache, warmupKokoro } from './kokoro'
 import { canSpeak, consumeGreeting, createVoiceGate, unlock } from '../shared/audio/voiceGate'
 import { isHabitatRequestAllowed, overlayContentSecurityPolicy, type HabitatAllowOrigins } from '../shared/security/habitatRequest'
@@ -31,6 +33,27 @@ let hoverArmed = true
 let cursorPoll: ReturnType<typeof setInterval> | null = null
 let pendingGreeting = ''
 const voiceGate = createVoiceGate()
+
+function captionAndSpeak(text: string): void {
+  const full = guardOutgoing(text)
+  if (!full.trim()) return
+  sendOverlay('ordis:status', 'speaking')
+  for (const chunk of streamText(full)) sendOverlay('ordis:chunk', chunk)
+  speak(full)
+  sendOverlay('ordis:status', 'idle')
+}
+
+const habitatClock = createTaskClock({
+  now: () => Date.now(),
+  setTimeout: (fn, ms) => setTimeout(fn, ms),
+  clearTimeout: (id) => clearTimeout(id as ReturnType<typeof setTimeout>),
+  persist: (next) => saveTasks(next),
+  onFire: (task) => {
+    cancelTtsQueue()
+    setInteractive(true, { skipGreeting: true })
+    captionAndSpeak(formatFireLine(task))
+  }
+})
 
 let habitatPinned = false
 
@@ -112,7 +135,7 @@ function speakGreetingIfDue(): void {
   speak(pendingGreeting)
 }
 
-function setInteractive(next: boolean): void {
+function setInteractive(next: boolean, opts?: { skipGreeting?: boolean }): void {
   if (interactive && !next) hoverArmed = false
   interactive = next
   if (next) hitHover = false
@@ -120,7 +143,7 @@ function setInteractive(next: boolean): void {
   sendOverlay('ordis:interactive', interactive)
   if (next) {
     unlock(voiceGate)
-    speakGreetingIfDue()
+    if (!opts?.skipGreeting) speakGreetingIfDue()
     if (overlay && !overlay.isDestroyed()) {
       overlay.focus()
       overlay.webContents.focus()
@@ -165,19 +188,36 @@ function stopCursorPoll(): void {
 function persist(): void {
   saveSettings(settings)
   saveMemory(memory)
+  saveTasks(habitatClock.snapshot())
 }
 
 function speak(text: string): void {
-  if (!canSpeak(voiceGate) || !settings.voiceOutEnabled || !ttsAvailable()) return
+  if (!interactive) {
+    console.error('Ordis playback missed: overlay is click-through')
+    return
+  }
+  if (!canSpeak(voiceGate) || !settings.voiceOutEnabled || !ttsAvailable()) {
+    if (!canSpeak(voiceGate)) console.error('Ordis playback missed: voice gated')
+    return
+  }
   const trimmed = text.trim()
   if (!trimmed) {
     sendOverlay('ordis:status', 'idle')
     return
   }
   void enqueueSynthesize(trimmed).then((result) => {
-    if (!result) return
+    if (!result) {
+      console.error('Ordis playback missed: synthesizer returned empty')
+      return
+    }
+    if (!interactive) {
+      console.error('Ordis playback missed: overlay is click-through')
+      return
+    }
     const pcm = Buffer.from(result.pcm.buffer, result.pcm.byteOffset, result.pcm.byteLength)
-    sendOverlay('ordis:voice', { sampleRate: result.sampleRate, pcm })
+    const speakers = startOsPlayback(result.pcm, result.sampleRate, app.getPath('userData'))
+    if (!speakers) console.error('Ordis playback missed: native player unavailable')
+    sendOverlay('ordis:voice', { sampleRate: result.sampleRate, pcm, speakers })
   })
 }
 
@@ -280,15 +320,47 @@ async function runChat(text: string): Promise<void> {
   abort?.abort()
   abort = new AbortController()
   cancelTtsQueue()
+  sendOverlay('ordis:status', 'thinking')
+  const canned = canonicalReply(trimmed)
+  if (canned) {
+    history.push(newMessage('operator', trimmed))
+    const full = guardOutgoing(canned)
+    sendOverlay('ordis:status', 'speaking')
+    for (const chunk of streamText(full)) sendOverlay('ordis:chunk', chunk)
+    speak(full)
+    history.push(newMessage('ordis', full))
+    if (history.length > 40) history = history.slice(-40)
+    persist()
+    sendOverlay('ordis:status', 'idle')
+    return
+  }
+  const habitat = handleHabitatTurn({
+    text: trimmed,
+    memory,
+    tasks: habitatClock.snapshot(),
+    now: Date.now()
+  })
+  if (habitat.handled) {
+    memory = habitat.memory
+    habitatClock.replace(habitat.tasks)
+    history.push(newMessage('operator', trimmed))
+    const full = guardOutgoing(habitat.reply)
+    sendOverlay('ordis:status', 'speaking')
+    for (const chunk of streamText(full)) sendOverlay('ordis:chunk', chunk)
+    speak(full)
+    history.push(newMessage('ordis', full))
+    if (history.length > 40) history = history.slice(-40)
+    persist()
+    sendOverlay('ordis:status', 'idle')
+    return
+  }
   memory = ingestOperatorUtterance(memory, trimmed)
   history.push(newMessage('operator', trimmed))
-  sendOverlay('ordis:status', 'thinking')
   const config = { apiKey: settings.apiKey, apiBaseUrl: settings.apiBaseUrl }
   let full = ''
   try {
-    const canned = canonicalReply(trimmed)
-    if (canned || !settings.apiKey.trim() || !settings.apiBaseUrl.trim()) {
-      full = guardOutgoing(canned ?? offlineReply(trimmed, config))
+    if (!settings.apiKey.trim() || !settings.apiBaseUrl.trim()) {
+      full = guardOutgoing(offlineReply(trimmed, config))
       sendOverlay('ordis:status', 'speaking')
       for (const chunk of streamText(full)) sendOverlay('ordis:chunk', chunk)
       speak(full)
@@ -395,6 +467,7 @@ function registerIpc(): void {
     sendOverlay('ordis:status', 'idle')
     sendOverlay('ordis:interactive', interactive)
     sendOverlay('ordis:captions', settings.captionsEnabled)
+    habitatClock.restore(loadTasks())
     speakGreetingIfDue()
   })
   ipcMain.handle('app:quit', () => app.quit())
@@ -440,6 +513,7 @@ if (!gotLock) {
 
   app.on('before-quit', () => {
     stopCursorPoll()
+    habitatClock.stop()
     persist()
     if (settingsWin && !settingsWin.isDestroyed()) {
       settingsWin.removeAllListeners('close')
