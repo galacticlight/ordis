@@ -27,6 +27,10 @@ describe("darwin-arm64 package job", () => {
     expect(hook).toContain("NSAllowsArbitraryLoads")
     expect(hook).toMatch(/-bool",\s*"false"/)
     expect(hook).toContain("electronPlatformName")
+    expect(hook).toContain("adHocSign")
+    expect(hook).toContain("--force")
+    expect(hook).toContain("--deep")
+    expect(hook).toContain("--sign")
   })
 
   it("ships a 512px-or-larger icon.png for electron-builder mac", () => {
