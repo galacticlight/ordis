@@ -40,10 +40,14 @@ export interface StreamChunk {
   value: string
 }
 
+export const HARBOR_API_BASE_URL = 'https://api.x.ai/v1'
+export const HARBOR_MODEL = 'grok-4.6'
+export const OVERLAY_REASONING_EFFORT = 'low' as const
+
 export const DEFAULT_SETTINGS: AppSettings = {
-  apiBaseUrl: 'https://api.openai.com/v1',
+  apiBaseUrl: HARBOR_API_BASE_URL,
   apiKey: '',
-  model: 'gpt-4o-mini',
+  model: HARBOR_MODEL,
   temperature: 0.85,
   alwaysOnTop: true,
   clickThroughIdle: true,

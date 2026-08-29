@@ -45,6 +45,8 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build
+      - name: Vendor q8 Kokoro ONNX and espeak-ng
+        run: node scripts/vendorVoiceExtras.cjs
       - name: Package unsigned darwin-arm64 dir
         run: npx electron-builder --mac dir --arm64
         env:

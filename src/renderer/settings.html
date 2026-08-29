@@ -15,11 +15,19 @@
       <h1>Cephalon link</h1>
       <p class="seal">Steward’s log</p>
       <p class="lede">
-        Keys stay in this habitat’s user-data, OS-encrypted. No plaintext fallback. They are never committed, and the overlay never receives the raw key.
+        Harbor (xAI Grok) is the default wider mind. Keys stay in this habitat’s user-data, OS-encrypted. No plaintext fallback. They are never committed, and the overlay never receives the raw key or fetches Harbor. Without a key, Ordis still greets, remembers, and speaks from local precepts.
       </p>
       <label>
+        Preset
+        <select id="preset">
+          <option value="harbor" selected>Grok / Harbor (xAI)</option>
+          <option value="openai">OpenAI-compatible</option>
+          <option value="custom">Custom</option>
+        </select>
+      </label>
+      <label>
         Endpoint
-        <input id="apiBaseUrl" type="url" placeholder="https://api.openai.com/v1" />
+        <input id="apiBaseUrl" type="url" placeholder="https://api.x.ai/v1" />
       </label>
       <label>
         API key
@@ -28,7 +36,7 @@
       <p id="key-status" class="hint"></p>
       <label>
         Model
-        <input id="model" type="text" placeholder="gpt-4o-mini" />
+        <input id="model" type="text" placeholder="grok-4.6" />
       </label>
       <label class="check">
         <input id="alwaysOnTop" type="checkbox" checked />
@@ -44,7 +52,7 @@
       </label>
       <label class="check"><input id="voiceOutEnabled" type="checkbox" checked /> Radio vocalizer (on-device)</label>
       <p class="hint">
-        Operator: Kokoro <code>am_michael</code> on-device (Apache weights), radio path, espeak-ng fallback. Voice-in stays off until
+        Operator: packaged Kokoro <code>am_michael</code> q8 (Apache weights) plus radio path, espeak-ng fallback. No first-run model download when extras are vendored. Voice-in stays off until
         on-device STT exists. Ordis will not pretend with a browser speechSynthesis stub.
       </p>
       <div class="row">

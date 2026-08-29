@@ -23,7 +23,7 @@ cp .env.example .env   # optional; Settings in the app is the supported key stor
 npm run dev
 ```
 
-The overlay appears at the bottom-right: frameless, transparent, always-on-top, idle click-through; hover the Sentinel to speak. Type to the Operator composer. Without an API key, Ordis still answers from local precepts so the steward stays present.
+The overlay appears at the bottom-right: frameless, transparent, always-on-top, idle click-through; hover the Sentinel to speak. Type to the Operator composer. Ordis is offline-first: without an API key, he still greets, speaks locally, uses on-disk Operator memory, and answers from YAML personality precepts.
 
 ### Production build
 
@@ -34,19 +34,19 @@ npm run package        # optional: electron-builder --dir unpacked app
 
 Headless CI runs `lint`, `typecheck`, `test`, and `build`. A full GUI needs a display (or `xvfb-run` on Linux).
 
-### Make it actually talk
+### Harbor (optional wider mind)
 
 1. Open **Settings** on the overlay (gear).
-2. Set an **OpenAI-compatible** chat-completions endpoint (`https://api.openai.com/v1` or any local server that implements `/v1/chat/completions`).
-3. Paste your API key. It is written to the OS user-data file `secrets.json` with mode `0600`. It is never hardcoded and never committed.
-4. Set the model id your provider expects.
+2. **Grok / Harbor (xAI)** is the preset: base URL `https://api.x.ai/v1`, model `grok-4.6`.
+3. Paste your xAI API key if you want Harbor. It is written to the OS user-data file `secrets.json` via safeStorage. Overlay prefs still save without a key.
+4. LLM fetch stays in Electron main. The renderer never talks to api.x.ai. Overlay chat uses `/v1/chat/completions` with `reasoning_effort: "low"`.
 
 Optional env (dev only; Settings wins once saved):
 
 ```
-ORDIS_API_BASE_URL=https://api.openai.com/v1
+ORDIS_API_BASE_URL=https://api.x.ai/v1
 ORDIS_API_KEY=
-ORDIS_MODEL=gpt-4o-mini
+ORDIS_MODEL=grok-4.6
 ```
 
 See `.env.example`. Do not put real secrets in git.
@@ -57,18 +57,18 @@ See `.env.example`. Do not put real secrets in git.
 |---|---|
 | Native desktop overlay, always-on-top, draggable, idle tuck | `src/main/index.ts`, chrome bar tuck control |
 | Sentinel body + unbroken cube glyph + speech ripples | `src/renderer/src/avatar/OrdisAvatar.ts` |
-| Streaming chat (live tokens; offline word-stream) | `src/shared/llm/openaiCompatible.ts`, main chat loop |
+| Streaming chat (live tokens; unharbored word-stream) | `src/shared/llm/openaiCompatible.ts`, main chat loop |
 | Personality pack (YAML precepts, not a generic bot) | `src/shared/personality/*` |
 | Local Operator memory | `src/shared/memory/operatorMemory.ts` |
 | Status: idle / listening / thinking / speaking | overlay caption + eye pulse |
-| Settings for keys; offline fallback lines | Settings panel; `fallbacks.ts` |
-| On-device radio vocalizer (voice out) | Kokoro am_michael (Apache) + radio filter; espeak-ng fallback |
+| Settings for keys; unharbored local precepts | Settings panel; `fallbacks.ts` |
+| On-device radio vocalizer (voice out) | Packaged Kokoro q8 am_michael + radio filter; espeak-ng fallback |
 
 ### Voice path
 
-- **Out:** on-device Kokoro `am_michael` (Apache-2.0 weights, cached in user-data) plus the radio filter. First launch may fetch the 82M ONNX. `am_puck` is the owned alternate. espeak-ng stays as fallback. No Digital Extremes audio.
+- **Out:** on-device Kokoro `am_michael` (Apache-2.0 q8 ONNX, voices `am_michael` / `am_puck` only) plus the radio filter. Packaged builds vendor the q8 weights and espeak-ng via `scripts/vendorVoiceExtras.cjs` into extraResources, so Ordis.app speaks without Homebrew and without a first-run model download. `am_puck` is the owned alternate. espeak-ng stays as fallback. No Digital Extremes audio.
 - **In:** still dark. No mic, no Web Speech, no browser `speechSynthesis` stub. On-device STT can replace this later without touching the personality engine.
-- Linux: `sudo apt install espeak-ng`. The rest of the stack is Electron (Chromium), so the overlay does not need WebKitGTK.
+- Dev extras: run the vendor:voice script. Unpackaged Linux can use distro espeak-ng. The rest of the stack is Electron (Chromium), so the overlay does not need WebKitGTK.
 
 ## Architecture
 
@@ -99,7 +99,7 @@ tests/            vitest — traps, loyalty, precepts, memory, SSE parser, radio
 | `npm run lint` | ESLint |
 | `npm run typecheck` | tsc --noEmit |
 | `npm run build` | Production compile to `out/` |
-| `npm run package` | Unpacked desktop dir via electron-builder |
+| `npm run package` | Unpacked desktop dir via electron-builder, after voice extras |
 
 ## License
 

@@ -1,4 +1,5 @@
 import { LlmError, streamChatCompletion, type ChatTurn, type StreamChatOptions } from './openaiCompatible'
+export { chatCompletionsBody, chatCompletionsUrl } from './openaiCompatible'
 
 export interface ProviderHealth {
   ok: boolean

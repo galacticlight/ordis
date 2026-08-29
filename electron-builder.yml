@@ -27,6 +27,8 @@ win:
   target:
     - dir
 asar: true
+asarUnpack:
+  - '**/*.node'
 afterPack: scripts/afterPack.cjs
 
 extraResources:
@@ -34,3 +36,8 @@ extraResources:
     to: personality
   - from: resources/icon.png
     to: icon.png
+  # Pack-time q8 Kokoro ONNX + espeak-ng (scripts/vendorVoiceExtras.cjs)
+  - from: vendor/voice/kokoro
+    to: kokoro
+  - from: vendor/voice/espeak-ng
+    to: espeak-ng

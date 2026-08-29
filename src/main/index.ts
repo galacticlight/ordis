@@ -3,7 +3,7 @@ import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import type { AppSettings, ChatMessage, PublicSettings } from '../shared/types'
-import { DEFAULT_MEMORY, DEFAULT_SETTINGS, type OperatorMemory } from '../shared/types'
+import { DEFAULT_MEMORY, DEFAULT_SETTINGS, OVERLAY_REASONING_EFFORT, type OperatorMemory } from '../shared/types'
 import { canonicalReply, composeMessages, greeting, LiveCaptionGuard, newMessage, offlineReply, streamText } from '../shared/personality/engine'
 import { loadPersonalityPack } from '../shared/personality/pack'
 import { guardOutgoing } from '../shared/personality/traps'
@@ -11,7 +11,7 @@ import { ingestOperatorUtterance } from '../shared/memory/operatorMemory'
 import { health, streamChatCompletion, LlmError } from '../shared/llm/provider'
 import { loadMemory, loadSettings, saveMemory, saveSettings, toPublicSettings } from './store'
 import { PlaintextKeyRefused } from '../shared/secrets'
-import { cancelTtsQueue, enqueueSynthesize, ttsAvailable } from './tts'
+import { cancelTtsQueue, enqueueSynthesize, primePackagedEspeakEnv, ttsAvailable } from './tts'
 import { setKokoroCache, warmupKokoro } from './kokoro'
 import { canSpeak, consumeGreeting, createVoiceGate, unlock } from '../shared/audio/voiceGate'
 import { isHabitatRequestAllowed, overlayContentSecurityPolicy, type HabitatAllowOrigins } from '../shared/security/habitatRequest'
@@ -34,18 +34,10 @@ const voiceGate = createVoiceGate()
 
 let habitatPinned = false
 
-function vocalizerOrigin(): string | null {
-  try {
-    return new URL(settings.apiBaseUrl).origin
-  } catch {
-    return null
-  }
-}
-
 function habitatAllowOrigins(): HabitatAllowOrigins {
   return {
     devOrigin: process.env.ELECTRON_RENDERER_URL || null,
-    vocalizerOrigin: vocalizerOrigin()
+    vocalizerOrigin: null
   }
 }
 
@@ -310,6 +302,7 @@ async function runChat(text: string): Promise<void> {
         apiKey: settings.apiKey,
         model: settings.model,
         temperature: settings.temperature,
+        reasoningEffort: OVERLAY_REASONING_EFFORT,
         messages,
         signal: abort.signal
       })) {
@@ -418,6 +411,7 @@ if (!gotLock) {
     settings = loadSettings()
     memory = loadMemory()
     setKokoroCache(join(app.getPath('userData'), 'kokoro'))
+    primePackagedEspeakEnv()
     warmupKokoro()
     registerIpc()
     Menu.setApplicationMenu(null)

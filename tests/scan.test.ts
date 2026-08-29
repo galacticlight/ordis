@@ -8,7 +8,7 @@ function walk(dir: string, acc: string[] = []): string[] {
     const full = join(dir, name)
     const st = statSync(full)
     if (st.isDirectory()) {
-      if (name === 'node_modules' || name === 'out' || name === 'dist' || name === '.git') continue
+      if (name === 'node_modules' || name === 'out' || name === 'dist' || name === '.git' || name === 'vendor' || name === 'release') continue
       walk(full, acc)
     } else {
       acc.push(full)

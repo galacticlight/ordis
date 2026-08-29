@@ -3,11 +3,14 @@ export interface ChatTurn {
   content: string
 }
 
+export type ReasoningEffort = 'low' | 'medium' | 'high' | 'xhigh'
+
 export interface StreamChatOptions {
   apiBaseUrl: string
   apiKey: string
   model: string
   temperature?: number
+  reasoningEffort?: ReasoningEffort
   messages: ChatTurn[]
   fetchImpl?: typeof fetch
   signal?: AbortSignal
@@ -27,6 +30,33 @@ function normalizeBase(url: string): string {
   return url.replace(/\/+$/, '')
 }
 
+export function chatCompletionsUrl(apiBaseUrl: string): string {
+  return `${normalizeBase(apiBaseUrl)}/chat/completions`
+}
+
+/**
+ * OpenAI-compatible chat.completions body.
+ * Chat completions is stateless: never send `store` or `previous_response_id`.
+ * Overlay Harbor uses top-level `reasoning_effort` (xAI grok-4.6).
+ * Do not send presence_penalty, frequency_penalty, or stop — reasoning models reject them.
+ */
+export function chatCompletionsBody(options: StreamChatOptions): Record<string, unknown> {
+  const body: Record<string, unknown> = {
+    model: options.model,
+    stream: true,
+    messages: options.messages
+  }
+  if (options.temperature !== undefined) {
+    body.temperature = options.temperature
+  } else {
+    body.temperature = 0.85
+  }
+  if (options.reasoningEffort) {
+    body.reasoning_effort = options.reasoningEffort
+  }
+  return body
+}
+
 /**
  * Stream an OpenAI-compatible chat.completions request.
  * Yields text tokens only. UI must not block on this.
@@ -39,19 +69,14 @@ export async function* streamChatCompletion(
     throw new LlmError('No fetch implementation available')
   }
 
-  const endpoint = `${normalizeBase(options.apiBaseUrl)}/chat/completions`
+  const endpoint = chatCompletionsUrl(options.apiBaseUrl)
   const response = await fetchImpl(endpoint, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${options.apiKey}`,
       'Content-Type': 'application/json'
     },
-    body: JSON.stringify({
-      model: options.model,
-      temperature: options.temperature ?? 0.85,
-      stream: true,
-      messages: options.messages
-    }),
+    body: JSON.stringify(chatCompletionsBody(options)),
     signal: options.signal
   })
 

@@ -1,10 +1,11 @@
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process'
 import { existsSync } from 'node:fs'
+import { delimiter, join } from 'node:path'
 import { DEFAULT_RADIO, modulateRadio } from '../shared/audio/radioFilter'
 import { float32ToInt16, int16ToFloat32, parsePcm16Wav } from '../shared/audio/wav'
 import { kokoroReady, synthesizeKokoro, warmupKokoro } from './kokoro'
 
-const ESPEAK_ARGS = ['-v', 'en+m3', '-s', '138', '-p', '38', '--stdout', '--'] as const
+export const ESPEAK_ARGS = ['-v', 'en+m3', '-s', '138', '-p', '38', '--stdout', '--'] as const
 const SPAWN_TIMEOUT_MS = 20_000
 const PATH_CANDIDATES = ['espeak-ng', '/usr/bin/espeak-ng', '/usr/local/bin/espeak-ng', '/opt/homebrew/bin/espeak-ng']
 
@@ -23,10 +24,57 @@ type Job = {
 
 const jobs: Job[] = []
 
+function resourceRoots(): string[] {
+  const roots: string[] = []
+  if (typeof process.resourcesPath === 'string' && process.resourcesPath.length > 0) {
+    roots.push(process.resourcesPath)
+  }
+  roots.push(join(process.cwd(), 'vendor/voice'))
+  return roots
+}
+
+export function espeakLookupCandidates(): string[] {
+  const packaged: string[] = []
+  for (const root of resourceRoots()) {
+    packaged.push(join(root, 'espeak-ng', 'bin', 'espeak-ng'))
+    packaged.push(join(root, 'espeak-ng', 'espeak-ng'))
+  }
+  return [...packaged, ...PATH_CANDIDATES]
+}
+
+function packagedRootFor(bin: string): string | null {
+  const normalized = bin.replaceAll('\\', '/')
+  const marker = '/espeak-ng/'
+  const idx = normalized.lastIndexOf(marker)
+  if (idx === -1) {
+    if (normalized.endsWith('/espeak-ng/espeak-ng')) {
+      return bin.slice(0, bin.length - '/espeak-ng'.length)
+    }
+    return null
+  }
+  return bin.slice(0, idx + '/espeak-ng'.length)
+}
+
+function spawnEnv(bin: string): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = { ...process.env }
+  const root = packagedRootFor(bin)
+  if (!root) return env
+  const lib = join(root, 'lib')
+  const data = join(root, 'share', 'espeak-ng-data')
+  const binDir = join(root, 'bin')
+  if (existsSync(data)) env.ESPEAK_DATA_PATH = data
+  env.PATH = `${binDir}${delimiter}${env.PATH ?? ''}`
+  if (existsSync(lib)) {
+    env.DYLD_LIBRARY_PATH = `${lib}${delimiter}${env.DYLD_LIBRARY_PATH ?? ''}`
+    env.LD_LIBRARY_PATH = `${lib}${delimiter}${env.LD_LIBRARY_PATH ?? ''}`
+  }
+  return env
+}
+
 function probeBin(bin: string): boolean {
   if (bin.includes('/') && !existsSync(bin)) return false
   try {
-    const probed = spawnSync(bin, ['--version'], { encoding: 'utf8', timeout: 4000 })
+    const probed = spawnSync(bin, ['--version'], { encoding: 'utf8', timeout: 4000, env: spawnEnv(bin) })
     return !probed.error
   } catch {
     return false
@@ -34,7 +82,7 @@ function probeBin(bin: string): boolean {
 }
 
 function findEspeak(): string | null {
-  for (const candidate of PATH_CANDIDATES) {
+  for (const candidate of espeakLookupCandidates()) {
     if (probeBin(candidate)) return candidate
   }
   try {
@@ -50,6 +98,16 @@ function findEspeak(): string | null {
 function espeakBin(): string | null {
   if (cachedBin === undefined) cachedBin = findEspeak()
   return cachedBin
+}
+
+export function primePackagedEspeakEnv(): void {
+  const bin = espeakBin()
+  if (!bin) return
+  const env = spawnEnv(bin)
+  if (env.PATH) process.env.PATH = env.PATH
+  if (env.ESPEAK_DATA_PATH) process.env.ESPEAK_DATA_PATH = env.ESPEAK_DATA_PATH
+  if (env.DYLD_LIBRARY_PATH) process.env.DYLD_LIBRARY_PATH = env.DYLD_LIBRARY_PATH
+  if (env.LD_LIBRARY_PATH) process.env.LD_LIBRARY_PATH = env.LD_LIBRARY_PATH
 }
 
 export function ttsAvailable(): boolean {
@@ -75,7 +133,8 @@ function captureStdout(text: string, bin: string): Promise<Buffer | null> {
     let child: ChildProcess
     try {
       child = spawn(bin, [...ESPEAK_ARGS, text], {
-        stdio: ['ignore', 'pipe', 'pipe']
+        stdio: ['ignore', 'pipe', 'pipe'],
+        env: spawnEnv(bin)
       })
     } catch {
       resolve(null)
@@ -116,6 +175,7 @@ function captureStdout(text: string, bin: string): Promise<Buffer | null> {
 export async function synthesizeRadio(text: string): Promise<TtsResult | null> {
   const trimmed = text.trim()
   if (!trimmed) return null
+  primePackagedEspeakEnv()
   warmupKokoro()
   if (kokoroReady()) {
     const neural = await synthesizeKokoro(trimmed)

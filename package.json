@@ -11,15 +11,17 @@
     "dev": "electron-vite dev",
     "build": "electron-vite build",
     "preview": "electron-vite preview",
-    "package": "electron-vite build && electron-builder --dir",
-    "package:linux": "electron-vite build && electron-builder --linux dir",
-    "package:darwin-arm64": "electron-vite build && electron-builder --mac dir --arm64",
+    "vendor:voice": "node scripts/vendorVoiceExtras.cjs",
+    "package": "electron-vite build && node scripts/vendorVoiceExtras.cjs && electron-builder --dir",
+    "package:linux": "electron-vite build && node scripts/vendorVoiceExtras.cjs && electron-builder --linux dir",
+    "package:darwin-arm64": "electron-vite build && node scripts/vendorVoiceExtras.cjs && electron-builder --mac dir --arm64",
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "eslint . --ext .ts",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
+    "@huggingface/transformers": "^3.5.1",
     "kokoro-js": "^1.2.1",
     "three": "^0.170.0",
     "yaml": "^2.6.1"
