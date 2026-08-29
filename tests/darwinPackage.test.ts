@@ -21,6 +21,12 @@ describe("darwin-arm64 package job", () => {
     expect(builder).toMatch(/NSAllowsArbitraryLoads:\s*false/)
     expect(builder).toMatch(/NSAllowsLocalNetworking:\s*true/)
     expect(builder).not.toMatch(/NSAllowsArbitraryLoads:\s*true/)
+    expect(builder).toContain("afterPack: scripts/afterPack.cjs")
+    const hook = readFileSync(join(root, "scripts/afterPack.cjs"), "utf8")
+    expect(hook).toContain("plutil")
+    expect(hook).toContain("NSAllowsArbitraryLoads")
+    expect(hook).toMatch(/-bool",\s*"false"/)
+    expect(hook).toContain("electronPlatformName")
   })
 
   it("ships a 512px-or-larger icon.png for electron-builder mac", () => {
