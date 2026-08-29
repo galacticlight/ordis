@@ -1,5 +1,5 @@
 import { app, safeStorage } from 'electron'
-import { packSecret, unpackSecret, type SecretBox } from '../shared/secrets'
+import { leftoverPlain, packSecret, scrubSecretDisk, unpackSecret, type SecretBox } from '../shared/secrets'
 import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import {
@@ -61,7 +61,16 @@ export function loadSettings(): AppSettings {
       Object.assign(base, patch)
     }
     if (existsSync(secretsFile())) {
-      const secret = JSON.parse(readFileSync(secretsFile(), 'utf8')) as { enc?: string; plain?: string }
+      const raw = JSON.parse(readFileSync(secretsFile(), 'utf8')) as Record<string, unknown>
+      const secret = scrubSecretDisk(raw)
+      if (leftoverPlain(raw)) {
+        writeFileSync(secretsFile(), JSON.stringify(secret, null, 2), 'utf8')
+        try {
+          chmodSync(secretsFile(), 0o600)
+        } catch {
+          // best-effort
+        }
+      }
       const key = unpackSecret(secret, electronSecretBox())
       if (key) base.apiKey = key
     }

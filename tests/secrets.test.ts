@@ -1,11 +1,14 @@
-import { describe, expect, it } from 'vitest'
+import { readFileSync } from "node:fs"
+import { join } from "node:path"
+import { describe, expect, it } from "vitest"
 import {
-  PlaintextKeyRefused,
-  hasPlaintextFallback,
+  leftoverPlain,
   packSecret,
+  PlaintextKeyRefused,
+  scrubSecretDisk,
   unpackSecret,
   type SecretBox
-} from '@shared/secrets'
+} from "@shared/secrets"
 
 function memoryBox(available: boolean): SecretBox {
   const store = new Map<string, string>()
@@ -18,23 +21,38 @@ function memoryBox(available: boolean): SecretBox {
     },
     decrypt: (enc: string) => {
       const value = store.get(enc)
-      if (value === undefined) throw new Error('missing')
+      if (value === undefined) throw new Error("missing")
       return value
     }
   }
 }
 
-describe('secret packing', () => {
-  it('refuses to pack a key when OS encryption is unavailable', () => {
-    expect(() => packSecret('sk-test', memoryBox(false))).toThrow(PlaintextKeyRefused)
+describe("secret packing", () => {
+  it("refuses to pack a key when OS encryption is unavailable", () => {
+    expect(() => packSecret("sk-test", memoryBox(false))).toThrow(PlaintextKeyRefused)
   })
 
-  it('never unpacks a plaintext fallback field', () => {
+  it("scrubs leftover plain and never unpacks it", () => {
     const box = memoryBox(true)
-    expect(unpackSecret({ plain: 'sk-leaked' }, box)).toBe('')
-    expect(hasPlaintextFallback({ plain: 'sk-leaked' })).toBe(true)
-    const packed = packSecret('sk-real', box)
-    expect(packed.plain).toBeUndefined()
-    expect(unpackSecret(packed, box)).toBe('sk-real')
+    const leaked = { enc: box.encrypt("sk-real"), plain: "sk-leaked" }
+    expect(leftoverPlain(leaked)).toBe(true)
+    const scrubbed = scrubSecretDisk(leaked)
+    expect(scrubbed).toEqual({ enc: leaked.enc })
+    expect("plain" in scrubbed).toBe(false)
+    expect(unpackSecret(scrubbed, box)).toBe("sk-real")
+    expect(unpackSecret(scrubSecretDisk({ plain: "sk-leaked" }), box)).toBe("")
+    const packed = packSecret("sk-real", box)
+    expect("plain" in packed).toBe(false)
+  })
+
+  it("does not keep a plain field on SecretDisk or in the store load path", () => {
+    const secrets = readFileSync(join(process.cwd(), "src/shared/secrets.ts"), "utf8")
+    const store = readFileSync(join(process.cwd(), "src/main/store.ts"), "utf8")
+    expect(secrets).not.toMatch(/plain\?:/)
+    expect(store).not.toMatch(/plain\?:/)
+    expect(store).toContain("leftoverPlain")
+    expect(store).toContain("scrubSecretDisk")
+    expect(store).toMatch(/if \(leftoverPlain\(raw\)\)/)
+    expect(store).toMatch(/writeFileSync\(secretsFile\(\)/)
   })
 })
