@@ -143,6 +143,8 @@ describe('packaged voice extras', () => {
     expect(packaged).toBeLessThan(homebrew)
     const ci = readFileSync(join(root, '.github/workflows/ci.yml'), 'utf8')
     expect(ci).toContain('vendorVoiceExtras.cjs')
+    const vendor = readFileSync(join(root, 'scripts/vendorVoiceExtras.cjs'), 'utf8')
+    expect(vendor).toContain('new URL(res.headers.location, current)')
     const vendorIdx = ci.indexOf('vendorVoiceExtras.cjs')
     const packIdx = ci.indexOf('npx electron-builder --mac dir --arm64')
     expect(vendorIdx).toBeGreaterThan(0)

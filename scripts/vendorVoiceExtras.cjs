@@ -54,7 +54,7 @@ function download(url, dest) {
           const status = res.statusCode ?? 0
           if (status >= 300 && status < 400 && res.headers.location) {
             res.resume()
-            request(res.headers.location)
+            request(new URL(res.headers.location, current).href)
             return
           }
           if (status !== 200) {
