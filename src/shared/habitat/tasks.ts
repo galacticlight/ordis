@@ -439,20 +439,28 @@ function snoozeName(text: string): string | undefined {
   return needle.toLowerCase()
 }
 
-function snoozeDurationMs(text: string): number | null {
+function snoozeDurationMs(text: string): { ms: number; capped: boolean } | null {
   const duration = DURATION_RE.exec(text)
   if (!duration) return null
   const ms = durationMs(Number(duration[1]), duration[2] ?? '')
   if (ms === null) return null
-  return Math.min(ms, MAX_SNOOZE_MS)
+  if (ms > MAX_SNOOZE_MS) return { ms: MAX_SNOOZE_MS, capped: true }
+  return { ms, capped: false }
 }
 
-export function formatSnoozeReply(task: HabitatTask, now: number): string {
+export function formatSnoozeReply(
+  task: HabitatTask,
+  now: number,
+  opts?: { capped?: boolean }
+): string {
   const when = formatWhen(task.dueAt, now)
+  const cap = opts?.capped
+    ? ' Ordis can only postpone a day at a time, so that longer ask was capped.'
+    : ''
   if (task.prompt) {
-    return `Postponed, Operator. The ${task.prompt} ${task.kind} is now due ${when}.`
+    return `Postponed, Operator. The ${task.prompt} ${task.kind} is now due ${when}.${cap}`
   }
-  return `Postponed, Operator. That ${task.kind} is now due ${when}.`
+  return `Postponed, Operator. That ${task.kind} is now due ${when}.${cap}`
 }
 
 function snoozeMissReply(kind: HabitatTaskKind | undefined, name: string | undefined): string {
@@ -595,13 +603,13 @@ export function handleHabitatTurn(input: HabitatTurnInput): HabitatTurn {
       }
     }
     const target = matches[0]!
-    const nextDue = target.dueAt + delay
+    const nextDue = target.dueAt + delay.ms
     const updated: HabitatTask = { ...target, dueAt: nextDue }
     return {
       handled: true,
       memory,
       tasks: tasks.map((task) => (task.id === target.id ? updated : task)),
-      reply: formatSnoozeReply(updated, now)
+      reply: formatSnoozeReply(updated, now, { capped: delay.capped })
     }
   }
 

@@ -10,6 +10,7 @@ import {
   isStatusQuery,
   isSnoozeQuery,
   MAX_PENDING_TASKS,
+  MAX_SNOOZE_MS,
   nextClockDue,
   parseSchedule,
   takeDue,
@@ -334,6 +335,17 @@ describe('unharbored habitat tasks', () => {
     expect(miss.tasks).toHaveLength(3)
     expect(miss.reply.toLowerCase()).toMatch(/no pending/)
     expect(isClean(miss.reply)).toBe(true)
+
+    const capped = handleHabitatTurn({
+      text: 'snooze the timer 48 hours',
+      memory,
+      tasks: pending,
+      now: 0
+    })
+    expect(capped.handled).toBe(true)
+    expect(capped.tasks.find((task) => task.id === 'timer-1')?.dueAt).toBe(5 * 60_000 + MAX_SNOOZE_MS)
+    expect(capped.reply.toLowerCase()).toMatch(/day|capped|24/)
+    expect(isClean(capped.reply)).toBe(true)
 
     const yaml = readFileSync(join(root, 'personality/ordis.v1.yaml'), 'utf8')
     expect(yaml).toMatch(/snooze_task/)
