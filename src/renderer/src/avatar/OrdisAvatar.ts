@@ -20,13 +20,13 @@ export const MOTION = {
   idlePrecessionRad: (2 * Math.PI) / 180,
   idlePrecessionPeriod: 20,
   corePulseHz: 0.15,
-  corePulseAmt: 0.08,
+  corePulseAmt: 0.015,
   listenHaloScale: 1.04,
   thinkSpinRadPerSec: (4 * Math.PI) / 180,
   speakRippleLife: 0.9,
-  speakRippleGap: 0.48,
+  speakRippleGap: 1.05,
   speakEnvelope: 0.38,
-  idleIntensity: 0.85
+  idleIntensity: 0.4
 } as const
 
 export const OVERLAY_FRUSTUM = { width: 420, height: 640 } as const
@@ -344,7 +344,7 @@ export class OrdisAvatar {
     this.mercuryMat.emissiveIntensity = 0.42 * pulse * idleMul * (this.status === 'thinking' ? 0.8 : 1)
     this.glowMat.opacity = 0.32 * pulse * idleMul
     this.coreLight.intensity = 1.2 * pulse * idleMul
-    const caustic = 1 + 0.04 * Math.sin(t * 0.7) * Math.sin(t * 1.13 + 0.4)
+    const caustic = 1 + 0.04 * idleMul * Math.sin(t * 0.7) * Math.sin(t * 1.13 + 0.4)
     this.mercury.scale.setScalar(caustic)
     this.glow.scale.setScalar(0.92 + 0.08 * pulse)
 
