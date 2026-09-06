@@ -342,6 +342,7 @@ async function runChat(text: string): Promise<void> {
   })
   if (habitat.handled) {
     memory = habitat.memory
+    saveMemory(memory)
     habitatClock.replace(habitat.tasks)
     history.push(newMessage('operator', trimmed))
     const full = guardOutgoing(habitat.reply)
@@ -355,6 +356,7 @@ async function runChat(text: string): Promise<void> {
     return
   }
   memory = ingestOperatorUtterance(memory, trimmed)
+  saveMemory(memory)
   history.push(newMessage('operator', trimmed))
   const config = { apiKey: settings.apiKey, apiBaseUrl: settings.apiBaseUrl }
   let full = ''
@@ -467,6 +469,7 @@ function registerIpc(): void {
     sendOverlay('ordis:status', 'idle')
     sendOverlay('ordis:interactive', interactive)
     sendOverlay('ordis:captions', settings.captionsEnabled)
+    sendOverlay('ordis:settings', toPublicSettings(settings))
     habitatClock.restore(loadTasks())
     speakGreetingIfDue()
   })

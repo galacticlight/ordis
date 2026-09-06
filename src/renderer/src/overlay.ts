@@ -1,6 +1,7 @@
 import './overlay.css'
 import { OrdisAvatar } from './avatar/OrdisAvatar'
-import type { CompanionStatus } from '../../shared/types'
+import { harborLinkCue } from '../../shared/harborCue'
+import type { CompanionStatus, PublicSettings } from '../../shared/types'
 
 function must<T extends HTMLElement>(id: string): T {
   const el = document.getElementById(id)
@@ -18,6 +19,7 @@ const hit = must<HTMLDivElement>('hit')
 const chrome = must<HTMLDivElement>('chrome')
 const btnSettings = must<HTMLButtonElement>('btn-settings')
 const btnTuck = must<HTMLButtonElement>('btn-tuck')
+const harborCue = must<HTMLDivElement>('harbor-cue')
 
 const scene = new OrdisAvatar(canvas)
 let captionsEnabled = true
@@ -136,6 +138,10 @@ function setCaption(text: string): void {
   caption.textContent = text
 }
 
+function applyHarborCue(settings: PublicSettings): void {
+  harborCue.textContent = harborLinkCue(settings.hasApiKey)
+}
+
 let hoverArmed = true
 let lastHitHover: boolean | null = null
 
@@ -241,5 +247,9 @@ window.ordis.onCaptions((enabled) => {
   captionsEnabled = enabled
   if (!enabled) caption.hidden = true
 })
+window.ordis.onSettings((settings) => {
+  applyHarborCue(settings)
+})
 setInteractiveUi(false)
+void window.ordis.getSettings().then(applyHarborCue)
 void window.ordis.ready()

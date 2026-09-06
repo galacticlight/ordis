@@ -126,6 +126,26 @@ body.interactive .hit {
   border-color: var(--ivory);
   font-style: normal;
 }
+.harbor-cue {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  z-index: 8;
+  display: none;
+  max-width: min(220px, calc(100% - 140px));
+  padding: 2px 0;
+  font-family: "IBM Plex Sans", Inter, "Segoe UI", sans-serif;
+  font-size: 11px;
+  line-height: 14px;
+  letter-spacing: 0.04em;
+  color: var(--cyan);
+  opacity: 0.72;
+  pointer-events: none;
+  -webkit-app-region: no-drag;
+}
+body.interactive .harbor-cue:not(:empty) {
+  display: block;
+}
 .chrome {
   position: absolute;
   top: 10px;
@@ -158,6 +178,7 @@ body.interactive .caption:not([hidden]) {
 }
 body.idle .chat,
 body.idle .chrome,
-body.idle .caption {
+body.idle .caption,
+body.idle .harbor-cue {
   display: none;
 }

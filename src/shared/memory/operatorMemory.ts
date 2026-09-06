@@ -239,3 +239,25 @@ export function recallSpeech(memory: OperatorMemory, dump = false): string {
   }
   return recallReply(memory)
 }
+
+/** Serialize Operator memory for user-data memory.json (survives relaunch). */
+export function serializeMemoryJson(memory: OperatorMemory): string {
+  return JSON.stringify(memory, null, 2)
+}
+
+/** Parse memory.json from disk into a fresh OperatorMemory (simulated relaunch). */
+export function parseMemoryJson(raw: string): OperatorMemory {
+  const disk = JSON.parse(raw) as Partial<OperatorMemory>
+  return createMemory({
+    likes: Array.isArray(disk.likes) ? [...disk.likes] : [],
+    dislikes: Array.isArray(disk.dislikes) ? [...disk.dislikes] : [],
+    notes: Array.isArray(disk.notes) ? [...disk.notes] : [],
+    facts:
+      disk.facts && typeof disk.facts === 'object' && !Array.isArray(disk.facts)
+        ? { ...disk.facts }
+        : {},
+    operatorName: typeof disk.operatorName === 'string' ? disk.operatorName : undefined,
+    addressAs: typeof disk.addressAs === 'string' ? disk.addressAs : undefined,
+    updatedAt: typeof disk.updatedAt === 'number' ? disk.updatedAt : 0
+  })
+}

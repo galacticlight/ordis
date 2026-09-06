@@ -1,4 +1,5 @@
 import './settings.css'
+import { harborLinkCue } from '../../shared/harborCue'
 import { HARBOR_API_BASE_URL, HARBOR_MODEL, type PublicSettings } from '../../shared/types'
 
 const OPENAI_API_BASE_URL = 'https://api.openai.com/v1'
@@ -18,9 +19,7 @@ const saveBtn = document.getElementById('save') as HTMLButtonElement
 const testBtn = document.getElementById('test') as HTMLButtonElement
 
 function describeKey(settings: PublicSettings): string {
-  return settings.hasApiKey
-    ? 'A key is stored in the habitat (user-data). The overlay never receives it.'
-    : 'No key stored. Ordis will speak from local precepts. Harbor is optional.'
+  return harborLinkCue(settings.hasApiKey)
 }
 
 function detectPreset(base: string, modelId: string): string {

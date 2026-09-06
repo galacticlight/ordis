@@ -16,6 +16,7 @@ export interface OrdisBridge {
   onGreeting: (cb: (text: string) => void) => () => void
   onInteractive: (cb: (next: boolean) => void) => () => void
   onCaptions: (cb: (enabled: boolean) => void) => () => void
+  onSettings: (cb: (settings: PublicSettings) => void) => () => void
   onVoice: (cb: (payload: { sampleRate: number; pcm: Uint8Array; speakers?: boolean }) => void) => () => void
 }
 
@@ -40,6 +41,7 @@ const bridge: OrdisBridge = {
   onGreeting: (cb) => subscribe('ordis:greeting', cb),
   onInteractive: (cb) => subscribe('ordis:interactive', cb),
   onCaptions: (cb) => subscribe('ordis:captions', cb),
+  onSettings: (cb) => subscribe('ordis:settings', cb),
   onVoice: (cb) => subscribe('ordis:voice', cb)
 }
 

@@ -3,12 +3,12 @@ import { leftoverPlain, packSecret, scrubSecretDisk, unpackSecret, type SecretBo
 import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import {
-  DEFAULT_MEMORY,
   DEFAULT_SETTINGS,
   type AppSettings,
   type OperatorMemory,
   type PublicSettings
 } from '../shared/types'
+import { createMemory, parseMemoryJson, serializeMemoryJson } from '../shared/memory/operatorMemory'
 import { normalizeTasks, type HabitatTask } from '../shared/habitat/tasks'
 
 function dir(): string {
@@ -116,25 +116,17 @@ export function toPublicSettings(settings: AppSettings): PublicSettings {
 
 export function loadMemory(): OperatorMemory {
   if (!existsSync(memoryFile())) {
-    return { ...DEFAULT_MEMORY, likes: [], dislikes: [], notes: [], facts: {} }
+    return createMemory()
   }
   try {
-    const disk = JSON.parse(readFileSync(memoryFile(), 'utf8')) as Partial<OperatorMemory>
-    return {
-      ...DEFAULT_MEMORY,
-      ...disk,
-      likes: disk.likes ?? [],
-      dislikes: disk.dislikes ?? [],
-      notes: disk.notes ?? [],
-      facts: disk.facts ?? {}
-    }
+    return parseMemoryJson(readFileSync(memoryFile(), 'utf8'))
   } catch {
-    return { ...DEFAULT_MEMORY, likes: [], dislikes: [], notes: [], facts: {} }
+    return createMemory()
   }
 }
 
 export function saveMemory(memory: OperatorMemory): void {
-  writeFileSync(memoryFile(), JSON.stringify(memory, null, 2), 'utf8')
+  writeFileSync(memoryFile(), serializeMemoryJson(memory), 'utf8')
 }
 
 function parseTaskDisk(raw: unknown): HabitatTask[] {

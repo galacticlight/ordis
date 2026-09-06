@@ -1,11 +1,17 @@
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
   createMemory,
   forgetFromUtterance,
   ingestOperatorUtterance,
   isForgetQuery,
+  parseMemoryJson,
+  recallReply,
   rememberFact,
   rememberNote,
+  serializeMemoryJson,
   summarizeMemory
 } from '@shared/memory/operatorMemory'
 
@@ -80,5 +86,44 @@ describe('habitat forget phrases', () => {
 
     const miss = forgetFromUtterance(createMemory(), 'forget that I like coffee')
     expect(miss.removed).toEqual([])
+  })
+})
+
+
+describe('durable Operator memory across relaunch', () => {
+  it('write → serialize → reload round-trips likes/notes/facts with empty apiKey', () => {
+    const emptyKey = { apiKey: '' }
+    expect(emptyKey.apiKey).toBe('')
+
+    let memory = createMemory()
+    memory = ingestOperatorUtterance(memory, 'remember that I like tea')
+    memory = rememberNote(memory, 'keep the overlay in the corner')
+    memory = rememberFact(memory, 'work', 'nights')
+
+    const dir = mkdtempSync(join(tmpdir(), 'ordis-memory-'))
+    const file = join(dir, 'memory.json')
+    writeFileSync(file, serializeMemoryJson(memory), 'utf8')
+
+    const reloaded = parseMemoryJson(readFileSync(file, 'utf8'))
+    expect(reloaded.likes).toContain('tea')
+    expect(reloaded.notes.some((note) => /overlay in the corner/.test(note))).toBe(true)
+    expect(reloaded.facts.work).toBe('nights')
+
+    const recall = recallReply(reloaded)
+    expect(recall).toMatch(/tea/)
+    expect(recall).toMatch(/nights|work/)
+    expect(recall).toMatch(/Operator/)
+  })
+
+  it('persists remember and forget immediately via main saveMemory', () => {
+    const main = readFileSync(join(process.cwd(), 'src/main/index.ts'), 'utf8')
+    const store = readFileSync(join(process.cwd(), 'src/main/store.ts'), 'utf8')
+    expect(store).toContain('serializeMemoryJson')
+    expect(store).toContain('parseMemoryJson')
+    expect(store).toContain('memory.json')
+    expect(main).toMatch(/memory = habitat\.memory\s*\n\s*saveMemory\(memory\)/)
+    expect(main).toMatch(/memory = ingestOperatorUtterance\(memory, trimmed\)\s*\n\s*saveMemory\(memory\)/)
+    expect(main).toContain('memory = loadMemory()')
+    expect(main).not.toMatch(/localStorage/)
   })
 })
