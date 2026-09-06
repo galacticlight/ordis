@@ -387,6 +387,36 @@ export function formatConfirmLine(task: HabitatTask, now: number): string {
   return `A reminder is set ${when}, Operator. Ordis will speak then.`
 }
 
+
+function findDuplicateNamed(
+  tasks: HabitatTask[],
+  kind: HabitatTaskKind,
+  prompt: string
+): HabitatTask | undefined {
+  const needle = prompt.toLowerCase()
+  if (!needle) return undefined
+  const pool = tasks.filter((task) => task.kind === kind && task.prompt)
+  const exact = pool
+    .filter((task) => task.prompt.toLowerCase() === needle)
+    .sort((a, b) => a.dueAt - b.dueAt)
+  if (exact[0]) return exact[0]
+  const includes = pool
+    .filter((task) => {
+      const existing = task.prompt.toLowerCase()
+      return existing.includes(needle) || needle.includes(existing)
+    })
+    .sort((a, b) => a.dueAt - b.dueAt)
+  return includes[0]
+}
+
+export function formatDuplicateFoundryReply(task: HabitatTask, now: number): string {
+  const when = formatWhen(task.dueAt, now)
+  if (task.prompt) {
+    return `That ${task.prompt} ${task.kind} is already on the foundry, Operator. It is due ${when}.`
+  }
+  return `That ${task.kind} is already on the foundry, Operator. It is due ${when}.`
+}
+
 function cancelKind(text: string): HabitatTaskKind | undefined {
   const hasTimer = /\btimers?\b/i.test(text)
   const hasReminder = /\breminders?\b/i.test(text)
@@ -845,6 +875,15 @@ export function handleHabitatTurn(input: HabitatTurnInput): HabitatTurn {
         tasks,
         reply:
           'Operator, the habitat already holds twenty pending timers and reminders. Cancel one, and Ordis will schedule another.'
+      }
+    }
+    const duplicate = findDuplicateNamed(tasks, parsed.kind, parsed.prompt)
+    if (duplicate) {
+      return {
+        handled: true,
+        memory,
+        tasks,
+        reply: formatDuplicateFoundryReply(duplicate, now)
       }
     }
     const task: HabitatTask = {

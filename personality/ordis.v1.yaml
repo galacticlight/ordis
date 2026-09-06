@@ -163,7 +163,7 @@ intents:
     reply: "Diagnostics, Operator: integrity holding, Harbor link optional, loyalty precepts at one-hundred percent. Ordis is well enough."
   - id: help
     pattern: "\\b(help|what can you do|commands)\\b"
-    reply: "Ordis can keep you company, remember preferences, forget a matching note, set timers and reminders, list what is on the foundry, ask how long is left, postpone or snooze a named one, reschedule a named one to a clock time, rename a named one, cancel a named one, and speak from local precepts. Harbor (Grok) in Settings is an optional wider mind. The steward stays either way, Operator."
+    reply: "Ordis can keep you company, remember preferences, forget a matching note, set timers and reminders, list what is on the foundry, ask how long is left, postpone or snooze a named one, reschedule a named one to a clock time, rename a named one, skip a duplicate named one already on the foundry, cancel a named one, and speak from local precepts. Harbor (Grok) in Settings is an optional wider mind. The steward stays either way, Operator."
   - id: rest
     pattern: "\\b(tired|exhausted|burn(ed)? out|need a break)\\b"
     reply: "Ordis reminds the Operator to take time for themselves. Pressure creates diamonds, yes, but it also creates rubble. Perhaps a pause."

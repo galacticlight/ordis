@@ -535,6 +535,67 @@ describe('unharbored habitat tasks', () => {
     expect(yaml).toMatch(/rename .+ to|call (?:the )?(?:timer|reminder)/)
   })
 
+
+  it('refuses a duplicate named reminder already on the foundry with an empty api key', () => {
+    expect(emptyKey.apiKey).toBe('')
+    const memory = createMemory()
+    const first = handleHabitatTurn({
+      text: 'remind me in 10 minutes to stretch',
+      memory,
+      tasks: [],
+      now: 0,
+      id: () => 'rem-1'
+    })
+    expect(first.handled).toBe(true)
+    expect(first.tasks).toHaveLength(1)
+    expect(first.tasks[0]?.kind).toBe('reminder')
+    expect(first.tasks[0]?.prompt.toLowerCase()).toContain('stretch')
+    expect(first.reply).toMatch(/Operator/)
+    expect(isClean(first.reply)).toBe(true)
+
+    const second = handleHabitatTurn({
+      text: 'remind me in 10 minutes to stretch',
+      memory,
+      tasks: first.tasks,
+      now: 60_000,
+      id: () => 'rem-2'
+    })
+    expect(second.handled).toBe(true)
+    expect(second.tasks).toHaveLength(1)
+    expect(second.tasks).toEqual(first.tasks)
+    expect(second.reply.toLowerCase()).toMatch(/already/)
+    expect(second.reply.toLowerCase()).toContain('foundry')
+    expect(second.reply.toLowerCase()).toContain('stretch')
+    expect(second.reply).toMatch(/Operator/)
+    expect(second.reply.toLowerCase()).toMatch(/9 minutes|in 9 minute/)
+    expect(isClean(second.reply)).toBe(true)
+
+    const unnamed = handleHabitatTurn({
+      text: 'timer 5 minutes',
+      memory,
+      tasks: [],
+      now: 0,
+      id: () => 'timer-1'
+    })
+    expect(unnamed.handled).toBe(true)
+    expect(unnamed.tasks).toHaveLength(1)
+    expect(unnamed.tasks[0]?.prompt).toBe('')
+
+    const stacked = handleHabitatTurn({
+      text: 'timer 5 minutes',
+      memory,
+      tasks: unnamed.tasks,
+      now: 0,
+      id: () => 'timer-2'
+    })
+    expect(stacked.handled).toBe(true)
+    expect(stacked.tasks).toHaveLength(2)
+    expect(stacked.tasks.every((task) => task.prompt === '')).toBe(true)
+
+    const yaml = readFileSync(join(root, 'personality/ordis.v1.yaml'), 'utf8')
+    expect(yaml).toMatch(/skip a duplicate named one already on the foundry/)
+  })
+
   it('forgets a matching like and misses calmly with an empty api key', () => {
     expect(emptyKey.apiKey).toBe('')
     const remembered = handleHabitatTurn({
