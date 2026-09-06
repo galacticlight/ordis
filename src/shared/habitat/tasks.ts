@@ -222,6 +222,24 @@ export function isSnoozeQuery(text: string): boolean {
   return BARE_SNOOZE_RE.test(text) || NAMED_SNOOZE_RE.test(text)
 }
 
+const RENAME_NAMED_KIND_RE =
+  /\brename\s+(?:the\s+)?(?!timer\b|reminder\b)(.+?)\s+(?:timer|reminder)s?\s+to\s+(.+)$/i
+const RENAME_BARE_KIND_RE = /\brename\s+(?:the\s+)?(?:timer|reminder)s?\s+to\s+(.+)$/i
+const RENAME_NAMED_RE = /\brename\s+(?:the\s+)?(.+?)\s+to\s+(.+)$/i
+const CALL_NAMED_KIND_RE =
+  /\bcall\s+(?:the\s+)?(?!timer\b|reminder\b)(.+?)\s+(?:timer|reminder)s?\s+(.+)$/i
+const CALL_BARE_KIND_RE = /\bcall\s+(?:the\s+)?(?:timer|reminder)s?\s+(.+)$/i
+
+export function isRenameQuery(text: string): boolean {
+  return (
+    RENAME_NAMED_KIND_RE.test(text) ||
+    RENAME_BARE_KIND_RE.test(text) ||
+    CALL_NAMED_KIND_RE.test(text) ||
+    CALL_BARE_KIND_RE.test(text) ||
+    RENAME_NAMED_RE.test(text)
+  )
+}
+
 export function isRememberCommand(text: string): boolean {
   if (isRecallQuery(text) || isDumpQuery(text) || isForgetQuery(text)) return false
   return /\b(remember that|remember this|note that|don'?t forget)\b/i.test(text)
@@ -233,6 +251,7 @@ export function looksLikeSchedule(text: string): boolean {
     isListQuery(text) ||
     isStatusQuery(text) ||
     isSnoozeQuery(text) ||
+    isRenameQuery(text) ||
     isRecallQuery(text) ||
     isForgetQuery(text) ||
     isRememberCommand(text)
@@ -475,6 +494,66 @@ function snoozeMissReply(kind: HabitatTaskKind | undefined, name: string | undef
   return 'No pending timer or reminder remains to postpone, Operator.'
 }
 
+function cleanRenameNeedle(raw: string | undefined): string | undefined {
+  if (!raw) return undefined
+  const needle = clean(raw).replace(/^(?:the|a|an|my|this|that)\s+/i, '')
+  if (!needle || /^(?:all|the|a|an|my|this|that)$/i.test(needle)) return undefined
+  return needle.toLowerCase()
+}
+
+function parseRename(
+  text: string
+): { needle?: string; nextPrompt: string } | null {
+  const namedKind = RENAME_NAMED_KIND_RE.exec(text)
+  if (namedKind) {
+    const nextPrompt = clean(namedKind[2])
+    if (!nextPrompt) return null
+    return { needle: cleanRenameNeedle(namedKind[1]), nextPrompt }
+  }
+  const bareKind = RENAME_BARE_KIND_RE.exec(text)
+  if (bareKind) {
+    const nextPrompt = clean(bareKind[1])
+    if (!nextPrompt) return null
+    return { nextPrompt }
+  }
+  const callNamed = CALL_NAMED_KIND_RE.exec(text)
+  if (callNamed) {
+    const nextPrompt = clean(callNamed[2])
+    if (!nextPrompt) return null
+    return { needle: cleanRenameNeedle(callNamed[1]), nextPrompt }
+  }
+  const callBare = CALL_BARE_KIND_RE.exec(text)
+  if (callBare) {
+    const nextPrompt = clean(callBare[1])
+    if (!nextPrompt) return null
+    return { nextPrompt }
+  }
+  const named = RENAME_NAMED_RE.exec(text)
+  if (named) {
+    const nextPrompt = clean(named[2])
+    if (!nextPrompt) return null
+    const needle = cleanRenameNeedle(named[1])
+    if (!needle || /^(?:timer|reminder)s?$/i.test(needle)) return null
+    return { needle, nextPrompt }
+  }
+  return null
+}
+
+export function formatRenameReply(task: HabitatTask): string {
+  if (task.prompt) {
+    return `Renamed, Operator. That ${task.kind} is now ${task.prompt}.`
+  }
+  return `Renamed, Operator. That ${task.kind} prompt is cleared.`
+}
+
+function renameMissReply(kind: HabitatTaskKind | undefined, name: string | undefined): string {
+  if (name && kind) return `There is no pending ${name} ${kind} to rename, Operator.`
+  if (name) return `There is no pending ${name} timer or reminder to rename, Operator.`
+  if (kind === 'timer') return 'No pending timer remains to rename, Operator.'
+  if (kind === 'reminder') return 'No pending reminder remains to rename, Operator.'
+  return 'No pending timer or reminder remains to rename, Operator.'
+}
+
 function cancelMissReply(kind: HabitatTaskKind | undefined, name: string | undefined): string {
   if (name && kind) return `There is no pending ${name} ${kind} to cancel, Operator.`
   if (name) return `There is no pending ${name} timer or reminder to cancel, Operator.`
@@ -614,6 +693,42 @@ export function handleHabitatTurn(input: HabitatTurnInput): HabitatTurn {
       memory,
       tasks: tasks.map((task) => (task.id === target.id ? updated : task)),
       reply: formatSnoozeReply(updated, now, { capped: delay.capped })
+    }
+  }
+
+  if (isRenameQuery(text)) {
+    const kind = cancelKind(text)
+    const parsed = parseRename(text)
+    if (!parsed) {
+      return {
+        handled: true,
+        memory,
+        tasks,
+        reply:
+          'Ordis can rename a timer or reminder without Harbor, Operator. Name one — rename the stretch reminder to yoga.'
+      }
+    }
+    const pool = tasks.filter((task) => !kind || task.kind === kind)
+    const matches = (
+      parsed.needle
+        ? pool.filter((task) => task.prompt.toLowerCase().includes(parsed.needle!))
+        : pool
+    ).sort((a, b) => a.dueAt - b.dueAt)
+    if (matches.length === 0) {
+      return {
+        handled: true,
+        memory,
+        tasks,
+        reply: renameMissReply(kind, parsed.needle)
+      }
+    }
+    const target = matches[0]!
+    const updated: HabitatTask = { ...target, prompt: parsed.nextPrompt }
+    return {
+      handled: true,
+      memory,
+      tasks: tasks.map((task) => (task.id === target.id ? updated : task)),
+      reply: formatRenameReply(updated)
     }
   }
 

@@ -9,6 +9,7 @@ import {
   handleHabitatTurn,
   isStatusQuery,
   isSnoozeQuery,
+  isRenameQuery,
   MAX_PENDING_TASKS,
   MAX_SNOOZE_MS,
   nextClockDue,
@@ -353,6 +354,93 @@ describe('unharbored habitat tasks', () => {
     expect(yaml).toMatch(/push (?:the )?(?:.+ )?back|snooze/)
   })
 
+  it('renames named and soonest pending tasks with an empty api key', () => {
+    expect(emptyKey.apiKey).toBe('')
+    const memory = createMemory()
+    const pending: HabitatTask[] = [
+      { id: 'timer-1', kind: 'timer', dueAt: 5 * 60_000, prompt: '', createdAt: 0 },
+      { id: 'rem-1', kind: 'reminder', dueAt: 10 * 60_000, prompt: 'stretch', createdAt: 0 },
+      { id: 'rem-2', kind: 'reminder', dueAt: 15 * 60_000, prompt: 'tea', createdAt: 0 }
+    ]
+
+    expect(isRenameQuery('rename the stretch reminder to yoga')).toBe(true)
+    expect(isRenameQuery('call the timer focus')).toBe(true)
+    expect(isRenameQuery('rename stretch to yoga')).toBe(true)
+    expect(isRenameQuery('snooze the timer 5 minutes')).toBe(false)
+    expect(isRenameQuery('cancel the timer')).toBe(false)
+
+    const named = handleHabitatTurn({
+      text: 'rename the stretch reminder to yoga',
+      memory,
+      tasks: pending,
+      now: 0
+    })
+    expect(named.handled).toBe(true)
+    expect(named.tasks.find((task) => task.id === 'rem-1')?.prompt).toBe('yoga')
+    expect(named.tasks.find((task) => task.id === 'rem-2')?.prompt).toBe('tea')
+    expect(named.tasks.find((task) => task.id === 'timer-1')?.prompt).toBe('')
+    expect(named.tasks.find((task) => task.id === 'rem-1')?.dueAt).toBe(10 * 60_000)
+    expect(named.reply).toMatch(/Operator/)
+    expect(named.reply.toLowerCase()).toMatch(/renam/)
+    expect(named.reply.toLowerCase()).toContain('yoga')
+    expect(named.reply.toLowerCase()).toContain('reminder')
+    expect(named.reply.toLowerCase()).not.toContain('tea')
+    expect(isClean(named.reply)).toBe(true)
+
+    const callTimer = handleHabitatTurn({
+      text: 'call the timer focus',
+      memory,
+      tasks: named.tasks,
+      now: 0
+    })
+    expect(callTimer.handled).toBe(true)
+    expect(callTimer.tasks.find((task) => task.id === 'timer-1')?.prompt).toBe('focus')
+    expect(callTimer.reply).toMatch(/Operator/)
+    expect(callTimer.reply.toLowerCase()).toContain('focus')
+    expect(callTimer.reply.toLowerCase()).toContain('timer')
+    expect(isClean(callTimer.reply)).toBe(true)
+
+    const bareRename = handleHabitatTurn({
+      text: 'rename stretch to yoga',
+      memory,
+      tasks: pending,
+      now: 0
+    })
+    expect(bareRename.handled).toBe(true)
+    expect(bareRename.tasks.find((task) => task.id === 'rem-1')?.prompt).toBe('yoga')
+    expect(bareRename.reply.toLowerCase()).toContain('yoga')
+    expect(isClean(bareRename.reply)).toBe(true)
+
+    const miss = handleHabitatTurn({
+      text: 'rename the coffee reminder to latte',
+      memory,
+      tasks: pending,
+      now: 0
+    })
+    expect(miss.handled).toBe(true)
+    expect(miss.tasks).toHaveLength(3)
+    expect(miss.tasks.find((task) => task.id === 'rem-1')?.prompt).toBe('stretch')
+    expect(miss.reply.toLowerCase()).toMatch(/no pending/)
+    expect(miss.reply).toMatch(/Operator/)
+    expect(isClean(miss.reply)).toBe(true)
+
+    const empty = handleHabitatTurn({
+      text: 'call the timer focus',
+      memory,
+      tasks: [],
+      now: 0
+    })
+    expect(empty.handled).toBe(true)
+    expect(empty.tasks).toHaveLength(0)
+    expect(empty.reply.toLowerCase()).toMatch(/no pending/)
+    expect(empty.reply).toMatch(/Operator/)
+    expect(isClean(empty.reply)).toBe(true)
+
+    const yaml = readFileSync(join(root, 'personality/ordis.v1.yaml'), 'utf8')
+    expect(yaml).toMatch(/rename_task/)
+    expect(yaml).toMatch(/rename a named one/)
+    expect(yaml).toMatch(/rename .+ to|call (?:the )?(?:timer|reminder)/)
+  })
 
   it('forgets a matching like and misses calmly with an empty api key', () => {
     expect(emptyKey.apiKey).toBe('')

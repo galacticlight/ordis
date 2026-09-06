@@ -152,12 +152,15 @@ intents:
   - id: snooze_task
     pattern: "\\b((?:snooze|postpone) (?:the )?(?:(?:timer|reminder)s?|.+ (?:timer|reminder)s?)|push (?:the )?(?:(?:timer|reminder)s?|.+ (?:timer|reminder)s?) back)\\b"
     reply: "Ordis can postpone a pending timer or reminder without Harbor, Operator. Name a duration, and that due time is pushed back."
+  - id: rename_task
+    pattern: "\\b((?:rename|call) (?:the )?(?:(?:timer|reminder)s?|.+ (?:timer|reminder)s?)(?: to)? .+|rename .+ to .+)\\b"
+    reply: "Ordis can rename a pending timer or reminder without Harbor, Operator. Name one, and its prompt is updated."
   - id: status
     pattern: "\\b(status|diagnostics|how are you|systems)\\b"
     reply: "Diagnostics, Operator: integrity holding, Harbor link optional, loyalty precepts at one-hundred percent. Ordis is well enough."
   - id: help
     pattern: "\\b(help|what can you do|commands)\\b"
-    reply: "Ordis can keep you company, remember preferences, forget a matching note, set timers and reminders, list what is on the foundry, ask how long is left, postpone or snooze a named one, cancel a named one, and speak from local precepts. Harbor (Grok) in Settings is an optional wider mind. The steward stays either way, Operator."
+    reply: "Ordis can keep you company, remember preferences, forget a matching note, set timers and reminders, list what is on the foundry, ask how long is left, postpone or snooze a named one, rename a named one, cancel a named one, and speak from local precepts. Harbor (Grok) in Settings is an optional wider mind. The steward stays either way, Operator."
   - id: rest
     pattern: "\\b(tired|exhausted|burn(ed)? out|need a break)\\b"
     reply: "Ordis reminds the Operator to take time for themselves. Pressure creates diamonds, yes, but it also creates rubble. Perhaps a pause."
