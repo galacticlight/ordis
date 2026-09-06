@@ -199,13 +199,28 @@ export function isListQuery(text: string): boolean {
   )
 }
 
+const BARE_STATUS_RE =
+  /\b(?:how long(?:\s+(?:is\s+)?left|\s+remaining)?(?:\s+(?:on|for))?\s+(?:the\s+)?(?:timer|reminder)s?|(?:when(?:\s+is)?\s+(?:the\s+)?(?:timer|reminder)s?)|(?:timer|reminder)s?\s+status|what(?:['’]s| is)\s+left(?:\s+on\s+(?:the\s+)?(?:foundry|(?:timer|reminder)s?))?|time\s+left\s+on\s+(?:the\s+)?(?:timer|reminder)s?)\b/i
+const NAMED_STATUS_RE =
+  /\b(?:how long(?:\s+(?:is\s+)?left|\s+remaining)?(?:\s+(?:on|for))?\s+(?:the\s+)?(?!timer\b|reminder\b)(.+?)\s+(?:timer|reminder)s?|when(?:\s+is)?\s+(?:the\s+)?(?!timer\b|reminder\b)(.+?)\s+(?:timer|reminder)s?|status\s+of\s+(?:the\s+)?(?!timer\b|reminder\b)(.+?)\s+(?:timer|reminder)s?|time\s+left\s+on\s+(?:the\s+)?(?!timer\b|reminder\b)(.+?)\s+(?:timer|reminder)s?)\b/i
+
+export function isStatusQuery(text: string): boolean {
+  return BARE_STATUS_RE.test(text) || NAMED_STATUS_RE.test(text)
+}
+
 export function isRememberCommand(text: string): boolean {
   if (isRecallQuery(text) || isDumpQuery(text)) return false
   return /\b(remember that|remember this|note that|don'?t forget)\b/i.test(text)
 }
 
 export function looksLikeSchedule(text: string): boolean {
-  if (isCancelQuery(text) || isListQuery(text) || isRecallQuery(text) || isRememberCommand(text)) {
+  if (
+    isCancelQuery(text) ||
+    isListQuery(text) ||
+    isStatusQuery(text) ||
+    isRecallQuery(text) ||
+    isRememberCommand(text)
+  ) {
     return false
   }
   if (/\b((?:set\s+(?:a\s+)?)?(?:timer|reminder)|remind me)\b/i.test(text)) return true
@@ -374,6 +389,34 @@ export function formatFoundryReply(
   return `Operator, on the foundry Ordis holds ${joinEnglish(pending.map((task) => formatPendingLine(task, now)))}.`
 }
 
+function statusName(text: string): string | undefined {
+  const named = NAMED_STATUS_RE.exec(text)
+  if (!named) return undefined
+  const raw = named[1] ?? named[2] ?? named[3] ?? named[4]
+  if (!raw) return undefined
+  const needle = clean(raw).replace(/^(?:the|a|an|my|this|that)\s+/i, '')
+  if (!needle || /^(?:all|the|a|an|my|this|that)$/i.test(needle)) return undefined
+  return needle.toLowerCase()
+}
+
+export function formatStatusReply(task: HabitatTask, now: number): string {
+  const when = formatWhen(task.dueAt, now)
+  if (task.prompt) {
+    return `Operator, the ${task.prompt} ${task.kind} is due ${when}.`
+  }
+  return `Operator, the soonest ${task.kind} is due ${when}.`
+}
+
+function statusMissReply(kind: HabitatTaskKind | undefined, name: string | undefined): string {
+  if (name && kind) return `There is no pending ${name} ${kind} to report, Operator.`
+  if (name) return `There is no pending ${name} timer or reminder to report, Operator.`
+  if (kind === 'timer') return 'No pending timer remains, Operator. The foundry is quiet on that count.'
+  if (kind === 'reminder') {
+    return 'No pending reminder remains, Operator. The foundry is quiet on that count.'
+  }
+  return 'No pending timer or reminder remains, Operator. The foundry is quiet.'
+}
+
 function cancelMissReply(kind: HabitatTaskKind | undefined, name: string | undefined): string {
   if (name && kind) return `There is no pending ${name} ${kind} to cancel, Operator.`
   if (name) return `There is no pending ${name} timer or reminder to cancel, Operator.`
@@ -450,6 +493,31 @@ export function handleHabitatTurn(input: HabitatTurnInput): HabitatTurn {
       memory,
       tasks,
       reply: formatFoundryReply(tasks, now, cancelKind(text))
+    }
+  }
+
+  if (isStatusQuery(text)) {
+    const kind = cancelKind(text)
+    const needle = statusName(text)
+    const pool = tasks.filter((task) => !kind || task.kind === kind)
+    const matches = (
+      needle
+        ? pool.filter((task) => task.prompt.toLowerCase().includes(needle))
+        : pool
+    ).sort((a, b) => a.dueAt - b.dueAt)
+    if (matches.length === 0) {
+      return {
+        handled: true,
+        memory,
+        tasks,
+        reply: statusMissReply(kind, needle)
+      }
+    }
+    return {
+      handled: true,
+      memory,
+      tasks,
+      reply: formatStatusReply(matches[0]!, now)
     }
   }
 

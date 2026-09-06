@@ -7,6 +7,7 @@ import {
   createTaskClock,
   formatFireLine,
   handleHabitatTurn,
+  isStatusQuery,
   MAX_PENDING_TASKS,
   nextClockDue,
   parseSchedule,
@@ -155,6 +156,101 @@ describe('unharbored habitat tasks', () => {
     expect(spelled.handled).toBe(true)
     expect(spelled.reply.toLowerCase()).toContain('stretch')
     expect(isClean(spelled.reply)).toBe(true)
+  })
+
+  it('reports pending timer status for soonest and named with an empty api key', () => {
+    expect(emptyKey.apiKey).toBe('')
+    const memory = createMemory()
+    const pending: HabitatTask[] = [
+      { id: 'timer-1', kind: 'timer', dueAt: 5 * 60_000, prompt: '', createdAt: 0 },
+      { id: 'rem-1', kind: 'reminder', dueAt: 10 * 60_000, prompt: 'stretch', createdAt: 0 },
+      { id: 'rem-2', kind: 'reminder', dueAt: 15 * 60_000, prompt: 'tea', createdAt: 0 }
+    ]
+
+    expect(isStatusQuery('how long left on the timer')).toBe(true)
+    expect(isStatusQuery('when is the stretch reminder')).toBe(true)
+    expect(isStatusQuery('timer status')).toBe(true)
+    expect(isStatusQuery("what's left on the foundry")).toBe(true)
+    expect(isStatusQuery('status')).toBe(false)
+    expect(isStatusQuery("what's on the foundry")).toBe(false)
+
+    const soonest = handleHabitatTurn({
+      text: 'how long left on the timer',
+      memory,
+      tasks: pending,
+      now: 0
+    })
+    expect(soonest.handled).toBe(true)
+    expect(soonest.tasks).toHaveLength(3)
+    expect(soonest.reply).toMatch(/Operator/)
+    expect(soonest.reply.toLowerCase()).toContain('timer')
+    expect(soonest.reply.toLowerCase()).toMatch(/5 minutes|in 5 minute/)
+    expect(soonest.reply.toLowerCase()).not.toContain('stretch')
+    expect(isClean(soonest.reply)).toBe(true)
+
+    const foundryLeft = handleHabitatTurn({
+      text: "what's left on the foundry",
+      memory,
+      tasks: pending,
+      now: 0
+    })
+    expect(foundryLeft.handled).toBe(true)
+    expect(foundryLeft.reply.toLowerCase()).toContain('timer')
+    expect(foundryLeft.reply.toLowerCase()).toMatch(/5 minutes|in 5 minute/)
+    expect(isClean(foundryLeft.reply)).toBe(true)
+
+    const named = handleHabitatTurn({
+      text: 'when is the stretch reminder',
+      memory,
+      tasks: pending,
+      now: 0
+    })
+    expect(named.handled).toBe(true)
+    expect(named.tasks).toHaveLength(3)
+    expect(named.reply).toMatch(/Operator/)
+    expect(named.reply.toLowerCase()).toContain('stretch')
+    expect(named.reply.toLowerCase()).toContain('reminder')
+    expect(named.reply.toLowerCase()).toMatch(/10 minutes|in 10 minute/)
+    expect(named.reply.toLowerCase()).not.toContain('tea')
+    expect(isClean(named.reply)).toBe(true)
+
+    const timerStatus = handleHabitatTurn({
+      text: 'timer status',
+      memory,
+      tasks: pending,
+      now: 0
+    })
+    expect(timerStatus.handled).toBe(true)
+    expect(timerStatus.reply.toLowerCase()).toContain('timer')
+    expect(timerStatus.reply.toLowerCase()).toMatch(/5 minutes|in 5 minute/)
+    expect(isClean(timerStatus.reply)).toBe(true)
+
+    const empty = handleHabitatTurn({
+      text: 'timer status',
+      memory,
+      tasks: [],
+      now: 0
+    })
+    expect(empty.handled).toBe(true)
+    expect(empty.reply.toLowerCase()).toMatch(/no pending|quiet/)
+    expect(empty.reply).toMatch(/Operator/)
+    expect(isClean(empty.reply)).toBe(true)
+
+    const miss = handleHabitatTurn({
+      text: 'when is the coffee reminder',
+      memory,
+      tasks: pending,
+      now: 0
+    })
+    expect(miss.handled).toBe(true)
+    expect(miss.tasks).toHaveLength(3)
+    expect(miss.reply.toLowerCase()).toMatch(/no pending/)
+    expect(isClean(miss.reply)).toBe(true)
+
+    const yaml = readFileSync(join(root, 'personality/ordis.v1.yaml'), 'utf8')
+    expect(yaml).toMatch(/task_status/)
+    expect(yaml).toMatch(/how long is left/)
+    expect(yaml).toMatch(/timer status/)
   })
 
   it('is wired in main before the Harbor apiKey check', () => {
