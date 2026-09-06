@@ -3,7 +3,7 @@ import type { PublicSettings, StreamChunk } from '../shared/types'
 
 export interface OrdisBridge {
   getSettings: () => Promise<PublicSettings>
-  saveSettings: (patch: Partial<PublicSettings> & { apiKey?: string }) => Promise<PublicSettings>
+  saveSettings: (patch: Partial<PublicSettings> & { apiKey?: string; clearApiKey?: boolean }) => Promise<PublicSettings>
   testConnection: () => Promise<{ ok: boolean; error?: string }>
   sendChat: (text: string) => Promise<void>
   setInteractive: (next: boolean) => Promise<void>

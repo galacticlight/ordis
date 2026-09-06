@@ -418,7 +418,7 @@ function trayIcon(): NativeImage {
 
 function registerIpc(): void {
   ipcMain.handle('settings:get', (): PublicSettings => toPublicSettings(settings))
-  ipcMain.handle('settings:save', (_e, patch: Partial<PublicSettings> & { apiKey?: string }) => {
+  ipcMain.handle('settings:save', (_e, patch: Partial<PublicSettings> & { apiKey?: string; clearApiKey?: boolean }) => {
     const next: AppSettings = { ...settings }
     if (typeof patch.apiBaseUrl === 'string') next.apiBaseUrl = patch.apiBaseUrl.trim()
     if (typeof patch.model === 'string') next.model = patch.model.trim()
@@ -429,7 +429,9 @@ function registerIpc(): void {
     if (typeof patch.chatterFrequency === 'number') next.chatterFrequency = patch.chatterFrequency
     if (typeof patch.voiceOutEnabled === 'boolean') next.voiceOutEnabled = patch.voiceOutEnabled
     next.voiceInEnabled = false
-    if (typeof patch.apiKey === 'string' && patch.apiKey.trim()) next.apiKey = patch.apiKey.trim()
+    // Explicit clear unlinks Harbor without wiping other prefs; omitted apiKey leaves the stored key.
+    if (patch.clearApiKey === true) next.apiKey = ''
+    else if (typeof patch.apiKey === 'string') next.apiKey = patch.apiKey.trim()
     const previous = settings
     try {
       settings = next

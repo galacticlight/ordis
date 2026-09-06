@@ -17,9 +17,15 @@ const keyStatus = document.getElementById('key-status') as HTMLParagraphElement
 const note = document.getElementById('note') as HTMLParagraphElement
 const saveBtn = document.getElementById('save') as HTMLButtonElement
 const testBtn = document.getElementById('test') as HTMLButtonElement
+const clearKeyBtn = document.getElementById('clearKey') as HTMLButtonElement
 
 function describeKey(settings: PublicSettings): string {
   return harborLinkCue(settings.hasApiKey)
+}
+
+function syncClearControl(settings: PublicSettings): void {
+  clearKeyBtn.hidden = !settings.hasApiKey
+  clearKeyBtn.disabled = !settings.hasApiKey
 }
 
 function detectPreset(base: string, modelId: string): string {
@@ -59,6 +65,7 @@ async function load(): Promise<void> {
   voiceOutEnabled.checked = s.voiceOutEnabled
   apiKey.value = ''
   keyStatus.textContent = describeKey(s)
+  syncClearControl(s)
 }
 
 saveBtn.addEventListener('click', async () => {
@@ -78,9 +85,23 @@ saveBtn.addEventListener('click', async () => {
     const saved = await window.ordis.saveSettings(patch)
     apiKey.value = ''
     keyStatus.textContent = describeKey(saved)
+    syncClearControl(saved)
     note.textContent = 'It is done. Settings stored in the habitat.'
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Could not store precepts.'
+    note.textContent = message
+  }
+})
+
+clearKeyBtn.addEventListener('click', async () => {
+  try {
+    const saved = await window.ordis.saveSettings({ clearApiKey: true })
+    apiKey.value = ''
+    keyStatus.textContent = describeKey(saved)
+    syncClearControl(saved)
+    note.textContent = 'Harbor unlinked. Speaking from local precepts.'
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Could not unlink Harbor.'
     note.textContent = message
   }
 })

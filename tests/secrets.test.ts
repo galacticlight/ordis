@@ -32,6 +32,11 @@ describe("secret packing", () => {
     expect(() => packSecret("sk-test", memoryBox(false))).toThrow(PlaintextKeyRefused)
   })
 
+  it("packs an empty key as a scrubbed secrets disk", () => {
+    expect(packSecret("", memoryBox(true))).toEqual({})
+    expect(packSecret("   ".trim(), memoryBox(false))).toEqual({})
+  })
+
   it("scrubs leftover plain and never unpacks it", () => {
     const box = memoryBox(true)
     const leaked = { enc: box.encrypt("sk-real"), plain: "sk-leaked" }

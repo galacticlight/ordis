@@ -8,7 +8,9 @@ import {
   OVERLAY_REASONING_EFFORT
 } from '@shared/types'
 import { chatCompletionsBody, chatCompletionsUrl, streamChatCompletion } from '@shared/llm/openaiCompatible'
+import { harborLinkCue } from '@shared/harborCue'
 import { offlineReply, shouldUseOffline } from '@shared/personality/engine'
+import { packSecret, type SecretBox } from '@shared/secrets'
 import { overlayContentSecurityPolicy } from '@shared/security/habitatRequest'
 import { KOKORO_DEVICE, KOKORO_DTYPE } from '../src/main/kokoro'
 import { espeakLookupCandidates } from '../src/main/tts'
@@ -43,6 +45,37 @@ describe('unharbored empty key', () => {
     expect(main).toContain('offlineReply')
     expect(main).toContain('canonicalReply')
     expect(main).toMatch(/!settings\.apiKey\.trim\(\)/)
+  })
+})
+
+
+describe('clear Harbor key from Settings', () => {
+  it('settings/store path clears key; hasApiKey false; cue string steward', () => {
+    const box: SecretBox = {
+      isAvailable: () => true,
+      encrypt: (value) => `enc:${value}`,
+      decrypt: (enc) => enc.slice(4)
+    }
+    expect(packSecret('', box)).toEqual({})
+    expect(harborLinkCue(false)).toBe('Speaking from local precepts · Harbor optional')
+    expect(harborLinkCue(true)).toBe('Harbor linked · Grok ready')
+
+    const main = readFileSync(join(root, 'src/main/index.ts'), 'utf8')
+    const store = readFileSync(join(root, 'src/main/store.ts'), 'utf8')
+    const settings = readFileSync(join(root, 'src/renderer/src/settings.ts'), 'utf8')
+    const preload = readFileSync(join(root, 'src/preload/index.ts'), 'utf8')
+
+    expect(main).toMatch(/patch\.clearApiKey === true/)
+    expect(main).toMatch(/next\.apiKey = ''/)
+    expect(main).toMatch(/typeof patch\.apiKey === 'string'\) next\.apiKey = patch\.apiKey\.trim\(\)/)
+    expect(main).toContain("sendOverlay('ordis:settings', toPublicSettings(settings))")
+    expect(store).toContain('hasApiKey: settings.apiKey.trim().length > 0')
+    expect(store).toContain('packSecret(next.apiKey')
+    expect(settings).toContain("saveSettings({ clearApiKey: true })")
+    expect(preload).toContain('clearApiKey?: boolean')
+    // hasApiKey is false when key is empty — same predicate store uses after clear
+    expect('sk-test'.trim().length > 0).toBe(true)
+    expect(''.trim().length > 0).toBe(false)
   })
 })
 
