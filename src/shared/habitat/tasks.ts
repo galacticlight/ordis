@@ -9,6 +9,7 @@ import {
 export const HABITAT_TZ = 'America/Los_Angeles'
 export const MAX_PENDING_TASKS = 20
 export const MAX_DELAY_MS = 7 * 24 * 60 * 60 * 1000
+export const MAX_SNOOZE_MS = 24 * 60 * 60 * 1000
 
 export type HabitatTaskKind = 'timer' | 'reminder'
 
@@ -208,6 +209,16 @@ export function isStatusQuery(text: string): boolean {
   return BARE_STATUS_RE.test(text) || NAMED_STATUS_RE.test(text)
 }
 
+const BARE_SNOOZE_RE =
+  /\b(?:(?:snooze|postpone)\s+(?:the\s+)?(?:timer|reminder)s?|push\s+(?:the\s+)?(?:timer|reminder)s?\s+back)\b/i
+const NAMED_SNOOZE_RE =
+  /\b(?:(?:snooze|postpone)\s+(?:the\s+)?(?!timer\b|reminder\b)(.+?)\s+(?:timer|reminder)s?|push\s+(?:the\s+)?(?!timer\b|reminder\b)(.+?)\s+(?:timer|reminder)s?\s+back)\b/i
+
+export function isSnoozeQuery(text: string): boolean {
+  if (!DURATION_RE.test(text)) return false
+  return BARE_SNOOZE_RE.test(text) || NAMED_SNOOZE_RE.test(text)
+}
+
 export function isRememberCommand(text: string): boolean {
   if (isRecallQuery(text) || isDumpQuery(text)) return false
   return /\b(remember that|remember this|note that|don'?t forget)\b/i.test(text)
@@ -218,6 +229,7 @@ export function looksLikeSchedule(text: string): boolean {
     isCancelQuery(text) ||
     isListQuery(text) ||
     isStatusQuery(text) ||
+    isSnoozeQuery(text) ||
     isRecallQuery(text) ||
     isRememberCommand(text)
   ) {
@@ -417,6 +429,40 @@ function statusMissReply(kind: HabitatTaskKind | undefined, name: string | undef
   return 'No pending timer or reminder remains, Operator. The foundry is quiet.'
 }
 
+function snoozeName(text: string): string | undefined {
+  const named = NAMED_SNOOZE_RE.exec(text)
+  if (!named) return undefined
+  const raw = named[1] ?? named[2]
+  if (!raw) return undefined
+  const needle = clean(raw).replace(/^(?:the|a|an|my|this|that)\s+/i, '')
+  if (!needle || /^(?:all|the|a|an|my|this|that)$/i.test(needle)) return undefined
+  return needle.toLowerCase()
+}
+
+function snoozeDurationMs(text: string): number | null {
+  const duration = DURATION_RE.exec(text)
+  if (!duration) return null
+  const ms = durationMs(Number(duration[1]), duration[2] ?? '')
+  if (ms === null) return null
+  return Math.min(ms, MAX_SNOOZE_MS)
+}
+
+export function formatSnoozeReply(task: HabitatTask, now: number): string {
+  const when = formatWhen(task.dueAt, now)
+  if (task.prompt) {
+    return `Postponed, Operator. The ${task.prompt} ${task.kind} is now due ${when}.`
+  }
+  return `Postponed, Operator. That ${task.kind} is now due ${when}.`
+}
+
+function snoozeMissReply(kind: HabitatTaskKind | undefined, name: string | undefined): string {
+  if (name && kind) return `There is no pending ${name} ${kind} to postpone, Operator.`
+  if (name) return `There is no pending ${name} timer or reminder to postpone, Operator.`
+  if (kind === 'timer') return 'No pending timer remains to postpone, Operator.'
+  if (kind === 'reminder') return 'No pending reminder remains to postpone, Operator.'
+  return 'No pending timer or reminder remains to postpone, Operator.'
+}
+
 function cancelMissReply(kind: HabitatTaskKind | undefined, name: string | undefined): string {
   if (name && kind) return `There is no pending ${name} ${kind} to cancel, Operator.`
   if (name) return `There is no pending ${name} timer or reminder to cancel, Operator.`
@@ -518,6 +564,44 @@ export function handleHabitatTurn(input: HabitatTurnInput): HabitatTurn {
       memory,
       tasks,
       reply: formatStatusReply(matches[0]!, now)
+    }
+  }
+
+  if (isSnoozeQuery(text)) {
+    const kind = cancelKind(text)
+    const needle = snoozeName(text)
+    const delay = snoozeDurationMs(text)
+    if (delay === null) {
+      return {
+        handled: true,
+        memory,
+        tasks,
+        reply:
+          'Ordis can postpone a timer or reminder without Harbor, Operator. Name a duration — five minutes, two hours.'
+      }
+    }
+    const pool = tasks.filter((task) => !kind || task.kind === kind)
+    const matches = (
+      needle
+        ? pool.filter((task) => task.prompt.toLowerCase().includes(needle))
+        : pool
+    ).sort((a, b) => a.dueAt - b.dueAt)
+    if (matches.length === 0) {
+      return {
+        handled: true,
+        memory,
+        tasks,
+        reply: snoozeMissReply(kind, needle)
+      }
+    }
+    const target = matches[0]!
+    const nextDue = target.dueAt + delay
+    const updated: HabitatTask = { ...target, dueAt: nextDue }
+    return {
+      handled: true,
+      memory,
+      tasks: tasks.map((task) => (task.id === target.id ? updated : task)),
+      reply: formatSnoozeReply(updated, now)
     }
   }
 

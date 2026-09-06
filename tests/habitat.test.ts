@@ -8,6 +8,7 @@ import {
   formatFireLine,
   handleHabitatTurn,
   isStatusQuery,
+  isSnoozeQuery,
   MAX_PENDING_TASKS,
   nextClockDue,
   parseSchedule,
@@ -251,6 +252,93 @@ describe('unharbored habitat tasks', () => {
     expect(yaml).toMatch(/task_status/)
     expect(yaml).toMatch(/how long is left/)
     expect(yaml).toMatch(/timer status/)
+  })
+
+  it('snoozes named and soonest pending tasks with an empty api key', () => {
+    expect(emptyKey.apiKey).toBe('')
+    const memory = createMemory()
+    const pending: HabitatTask[] = [
+      { id: 'timer-1', kind: 'timer', dueAt: 5 * 60_000, prompt: '', createdAt: 0 },
+      { id: 'rem-1', kind: 'reminder', dueAt: 10 * 60_000, prompt: 'stretch', createdAt: 0 },
+      { id: 'rem-2', kind: 'reminder', dueAt: 15 * 60_000, prompt: 'tea', createdAt: 0 }
+    ]
+
+    expect(isSnoozeQuery('snooze the timer 5 minutes')).toBe(true)
+    expect(isSnoozeQuery('postpone the stretch reminder 10 minutes')).toBe(true)
+    expect(isSnoozeQuery('push the reminder back 2 minutes')).toBe(true)
+    expect(isSnoozeQuery('snooze the timer')).toBe(false)
+    expect(isSnoozeQuery('cancel the timer')).toBe(false)
+
+    const named = handleHabitatTurn({
+      text: 'postpone the stretch reminder 10 minutes',
+      memory,
+      tasks: pending,
+      now: 0
+    })
+    expect(named.handled).toBe(true)
+    expect(named.tasks.find((task) => task.id === 'rem-1')?.dueAt).toBe(20 * 60_000)
+    expect(named.tasks.find((task) => task.id === 'rem-2')?.dueAt).toBe(15 * 60_000)
+    expect(named.tasks.find((task) => task.id === 'timer-1')?.dueAt).toBe(5 * 60_000)
+    expect(named.reply).toMatch(/Operator/)
+    expect(named.reply.toLowerCase()).toMatch(/postpon|snooz/)
+    expect(named.reply.toLowerCase()).toContain('stretch')
+    expect(named.reply.toLowerCase()).toMatch(/20 minutes|in 20 minute/)
+    expect(named.reply.toLowerCase()).not.toContain('tea')
+    expect(isClean(named.reply)).toBe(true)
+
+    const soonest = handleHabitatTurn({
+      text: 'snooze the timer 5 minutes',
+      memory,
+      tasks: named.tasks,
+      now: 0
+    })
+    expect(soonest.handled).toBe(true)
+    expect(soonest.tasks.find((task) => task.id === 'timer-1')?.dueAt).toBe(10 * 60_000)
+    expect(soonest.reply).toMatch(/Operator/)
+    expect(soonest.reply.toLowerCase()).toContain('timer')
+    expect(soonest.reply.toLowerCase()).toMatch(/10 minutes|in 10 minute/)
+    expect(isClean(soonest.reply)).toBe(true)
+
+    const push = handleHabitatTurn({
+      text: 'push the reminder back 2 minutes',
+      memory,
+      tasks: soonest.tasks,
+      now: 0
+    })
+    expect(push.handled).toBe(true)
+    expect(push.tasks.find((task) => task.id === 'rem-2')?.dueAt).toBe(17 * 60_000)
+    expect(push.tasks.find((task) => task.id === 'rem-1')?.dueAt).toBe(20 * 60_000)
+    expect(push.reply.toLowerCase()).toContain('tea')
+    expect(push.reply.toLowerCase()).toMatch(/17 minutes|in 17 minute/)
+    expect(isClean(push.reply)).toBe(true)
+
+    const empty = handleHabitatTurn({
+      text: 'snooze the timer 5 minutes',
+      memory,
+      tasks: [],
+      now: 0
+    })
+    expect(empty.handled).toBe(true)
+    expect(empty.tasks).toHaveLength(0)
+    expect(empty.reply.toLowerCase()).toMatch(/no pending/)
+    expect(empty.reply).toMatch(/Operator/)
+    expect(isClean(empty.reply)).toBe(true)
+
+    const miss = handleHabitatTurn({
+      text: 'postpone the coffee reminder 5 minutes',
+      memory,
+      tasks: pending,
+      now: 0
+    })
+    expect(miss.handled).toBe(true)
+    expect(miss.tasks).toHaveLength(3)
+    expect(miss.reply.toLowerCase()).toMatch(/no pending/)
+    expect(isClean(miss.reply)).toBe(true)
+
+    const yaml = readFileSync(join(root, 'personality/ordis.v1.yaml'), 'utf8')
+    expect(yaml).toMatch(/snooze_task/)
+    expect(yaml).toMatch(/postpone or snooze/)
+    expect(yaml).toMatch(/push (?:the )?(?:.+ )?back|snooze/)
   })
 
   it('is wired in main before the Harbor apiKey check', () => {
