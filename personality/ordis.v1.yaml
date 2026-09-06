@@ -161,12 +161,18 @@ intents:
   - id: reschedule_task
     pattern: "\\b((?:move|reschedule) (?:the )?(?:(?:timer|reminder)s?|.+ (?:timer|reminder)s?)|set (?:the )?(?:(?:timer|reminder)s?|.+ (?:timer|reminder)s?) to)\\b"
     reply: "Ordis can move a pending timer or reminder to a clock time without Harbor, Operator. Name a time of day, and that due time is updated."
+  - id: mute_voice
+    pattern: "\\b(mute(?: yourself)?|be quiet|silence(?: yourself)?|stop speaking)\\b"
+    reply: "Muted, Operator. Steward TTS stays quiet until you unmute. Harbor and memory stay put."
+  - id: unmute_voice
+    pattern: "\\b(unmute(?: yourself)?|speak again|you can (?:talk|speak)|voice on)\\b"
+    reply: "Voice restored, Operator. Ordis will speak again."
   - id: status
     pattern: "\\b(status|diagnostics|how are you|systems)\\b"
     reply: "Diagnostics, Operator: integrity holding, Harbor link optional, loyalty precepts at one-hundred percent. Ordis is well enough."
   - id: help
     pattern: "\\b(help|what can you do|commands)\\b"
-    reply: "Ordis can keep you company, remember preferences, forget a matching note, set timers and reminders, set a recurring reminder every morning or weekday, list what is on the foundry, ask how long is left, postpone or snooze a named one, reschedule a named one to a clock time, rename a named one, skip a duplicate named one already on the foundry, cancel a named one, and speak from local precepts. Harbor (Grok) in Settings is an optional wider mind. The steward stays either way, Operator."
+    reply: "Ordis can keep you company, remember preferences, forget a matching note, set timers and reminders, set a recurring reminder every morning or weekday, list what is on the foundry, ask how long is left, postpone or snooze a named one, reschedule a named one to a clock time, rename a named one, skip a duplicate named one already on the foundry, cancel a named one, mute or unmute steward TTS, and speak from local precepts. Harbor (Grok) in Settings is an optional wider mind. The steward stays either way, Operator."
   - id: rest
     pattern: "\\b(tired|exhausted|burn(ed)? out|need a break)\\b"
     reply: "Ordis reminds the Operator to take time for themselves. Pressure creates diamonds, yes, but it also creates rubble. Perhaps a pause."

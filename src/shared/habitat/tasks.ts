@@ -43,6 +43,8 @@ export interface HabitatTurnInput {
   tasks: HabitatTask[]
   now: number
   id?: () => string
+  /** Current steward TTS flag; mute/unmute phrases patch this without touching Harbor or memory. */
+  voiceOutEnabled?: boolean
 }
 
 export interface HabitatTurn {
@@ -50,6 +52,8 @@ export interface HabitatTurn {
   memory: OperatorMemory
   tasks: HabitatTask[]
   reply: string
+  /** When set, main persists voiceOutEnabled (mute never clears apiKey or memory). */
+  voiceOutEnabled?: boolean
 }
 
 export type TaskClockIo = {
@@ -810,12 +814,60 @@ function confirmRemember(before: OperatorMemory, after: OperatorMemory): string 
   return 'Logged, Operator. Ordis will keep that among the habitat notes.'
 }
 
+
+export function isMuteQuery(text: string): boolean {
+  return /\b(mute(?: yourself)?|be quiet|silence(?: yourself)?|stop speaking)\b/i.test(text)
+}
+
+export function isUnmuteQuery(text: string): boolean {
+  return /\b(unmute(?: yourself)?|speak again|you can (?:talk|speak)|voice on)\b/i.test(text)
+}
+
 export function handleHabitatTurn(input: HabitatTurnInput): HabitatTurn {
   const text = input.text.trim()
   const memory = input.memory
   const tasks = input.tasks
   const now = input.now
   const makeId = input.id ?? (() => `task-${now}-${Math.random().toString(16).slice(2, 10)}`)
+  const voiceOutEnabled = input.voiceOutEnabled !== false
+
+  if (isMuteQuery(text)) {
+    if (!voiceOutEnabled) {
+      return {
+        handled: true,
+        memory,
+        tasks,
+        reply: 'Ordis is already muted, Operator. Steward TTS stays quiet until you unmute.',
+        voiceOutEnabled: false
+      }
+    }
+    return {
+      handled: true,
+      memory,
+      tasks,
+      reply: 'Muted, Operator. Ordis will keep captions and the foundry, but steward TTS stays quiet until you unmute.',
+      voiceOutEnabled: false
+    }
+  }
+
+  if (isUnmuteQuery(text)) {
+    if (voiceOutEnabled) {
+      return {
+        handled: true,
+        memory,
+        tasks,
+        reply: 'Steward TTS is already on, Operator.',
+        voiceOutEnabled: true
+      }
+    }
+    return {
+      handled: true,
+      memory,
+      tasks,
+      reply: 'Voice restored, Operator. Ordis will speak again.',
+      voiceOutEnabled: true
+    }
+  }
 
   if (isCancelQuery(text)) {
     const kind = cancelKind(text)

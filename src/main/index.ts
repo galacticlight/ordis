@@ -338,12 +338,19 @@ async function runChat(text: string): Promise<void> {
     text: trimmed,
     memory,
     tasks: habitatClock.snapshot(),
-    now: Date.now()
+    now: Date.now(),
+    voiceOutEnabled: settings.voiceOutEnabled
   })
   if (habitat.handled) {
     memory = habitat.memory
     saveMemory(memory)
     habitatClock.replace(habitat.tasks)
+    if (typeof habitat.voiceOutEnabled === 'boolean' && habitat.voiceOutEnabled !== settings.voiceOutEnabled) {
+      settings = { ...settings, voiceOutEnabled: habitat.voiceOutEnabled }
+      saveSettings(settings)
+      if (!settings.voiceOutEnabled) cancelTtsQueue()
+      sendOverlay('ordis:settings', toPublicSettings(settings))
+    }
     history.push(newMessage('operator', trimmed))
     const full = guardOutgoing(habitat.reply)
     sendOverlay('ordis:status', 'speaking')

@@ -993,3 +993,65 @@ describe('due reminder playback gate', () => {
     expect(overlay).not.toMatch(/localStorage/)
   })
 })
+
+
+describe('mute / unmute steward TTS', () => {
+  it('mutes and unmutes with an empty api key without clearing memory', () => {
+    expect(emptyKey.apiKey).toBe('')
+    const remembered = handleHabitatTurn({
+      text: 'remember that I like tea',
+      memory: createMemory(),
+      tasks: [],
+      now: 0,
+      voiceOutEnabled: true
+    })
+    expect(remembered.memory.likes).toContain('tea')
+
+    const muted = handleHabitatTurn({
+      text: 'mute yourself',
+      memory: remembered.memory,
+      tasks: [],
+      now: 1,
+      voiceOutEnabled: true
+    })
+    expect(muted.handled).toBe(true)
+    expect(muted.voiceOutEnabled).toBe(false)
+    expect(muted.memory.likes).toContain('tea')
+    expect(muted.tasks).toEqual([])
+    expect(isClean(muted.reply)).toBe(true)
+    expect(muted.reply).toMatch(/Muted/)
+
+    const again = handleHabitatTurn({
+      text: 'be quiet',
+      memory: muted.memory,
+      tasks: [],
+      now: 2,
+      voiceOutEnabled: false
+    })
+    expect(again.voiceOutEnabled).toBe(false)
+    expect(again.reply).toMatch(/already muted/)
+
+    const unmuted = handleHabitatTurn({
+      text: 'unmute',
+      memory: muted.memory,
+      tasks: [],
+      now: 3,
+      voiceOutEnabled: false
+    })
+    expect(unmuted.handled).toBe(true)
+    expect(unmuted.voiceOutEnabled).toBe(true)
+    expect(unmuted.memory.likes).toContain('tea')
+    expect(unmuted.reply).toMatch(/Voice restored|speak again/i)
+  })
+
+  it('wires mute through main speak gate and Settings label', () => {
+    const main = readFileSync(join(root, 'src/main/index.ts'), 'utf8')
+    expect(main).toContain('voiceOutEnabled: settings.voiceOutEnabled')
+    expect(main).toContain('habitat.voiceOutEnabled')
+    expect(main).toMatch(/if \(!canSpeak\(voiceGate\) \|\| !settings\.voiceOutEnabled/)
+    const html = readFileSync(join(root, 'src/renderer/settings.html'), 'utf8')
+    expect(html).toMatch(/id="voiceOutEnabled"[^>]*checked/)
+    expect(html).toMatch(/Steward TTS \(uncheck to mute\)/)
+    expect(html).toMatch(/Mute never clears Harbor/)
+  })
+})

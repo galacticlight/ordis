@@ -50,7 +50,8 @@
         <input id="captionsEnabled" type="checkbox" checked />
         Captions
       </label>
-      <label class="check"><input id="voiceOutEnabled" type="checkbox" checked /> Radio vocalizer (on-device)</label>
+      <label class="check"><input id="voiceOutEnabled" type="checkbox" checked /> Steward TTS (uncheck to mute)</label>
+      <p class="hint">Mute never clears Harbor or Operator memory. You can also say “mute yourself” or “unmute”.</p>
       <p class="hint">
         Operator: packaged Kokoro <code>am_michael</code> q8 (Apache weights) plus radio path, espeak-ng fallback. No first-run model download when extras are vendored. Voice-in stays off until
         on-device STT exists. Ordis will not pretend with a browser speechSynthesis stub.
