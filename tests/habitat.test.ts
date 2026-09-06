@@ -9,6 +9,7 @@ import {
   handleHabitatTurn,
   isStatusQuery,
   isSnoozeQuery,
+  isRescheduleQuery,
   isRenameQuery,
   MAX_PENDING_TASKS,
   MAX_SNOOZE_MS,
@@ -352,6 +353,98 @@ describe('unharbored habitat tasks', () => {
     expect(yaml).toMatch(/snooze_task/)
     expect(yaml).toMatch(/postpone or snooze/)
     expect(yaml).toMatch(/push (?:the )?(?:.+ )?back|snooze/)
+  })
+
+  it('reschedules named pending tasks to a clock time with an empty api key', () => {
+    expect(emptyKey.apiKey).toBe('')
+    const memory = createMemory()
+    const now = Date.parse('2026-08-29T02:35:00.000Z')
+    const due3pm = nextClockDue(15, 0, now)
+    const due530 = nextClockDue(17, 30, now)
+    const pending: HabitatTask[] = [
+      { id: 'timer-1', kind: 'timer', dueAt: now + 5 * 60_000, prompt: '', createdAt: now },
+      { id: 'rem-1', kind: 'reminder', dueAt: now + 10 * 60_000, prompt: 'stretch', createdAt: now },
+      { id: 'rem-2', kind: 'reminder', dueAt: now + 15 * 60_000, prompt: 'tea', createdAt: now }
+    ]
+
+    expect(isRescheduleQuery('move the stretch reminder to 3pm')).toBe(true)
+    expect(isRescheduleQuery('reschedule the timer for 5:30 pm')).toBe(true)
+    expect(isRescheduleQuery('set the stretch reminder to 3pm')).toBe(true)
+    expect(isRescheduleQuery('remind me at 3pm to stretch')).toBe(false)
+    expect(isRescheduleQuery('set a reminder at 3pm')).toBe(false)
+    expect(isRescheduleQuery('snooze the timer 5 minutes')).toBe(false)
+
+    const named = handleHabitatTurn({
+      text: 'move the stretch reminder to 3pm',
+      memory,
+      tasks: pending,
+      now
+    })
+    expect(named.handled).toBe(true)
+    expect(named.tasks.find((task) => task.id === 'rem-1')?.dueAt).toBe(due3pm)
+    expect(named.tasks.find((task) => task.id === 'rem-2')?.dueAt).toBe(now + 15 * 60_000)
+    expect(named.tasks.find((task) => task.id === 'timer-1')?.dueAt).toBe(now + 5 * 60_000)
+    expect(named.reply).toMatch(/Operator/)
+    expect(named.reply.toLowerCase()).toMatch(/reschedul|moved|now due/)
+    expect(named.reply.toLowerCase()).toContain('stretch')
+    expect(named.reply.toLowerCase()).toMatch(/3\s*pm|at 3pm/)
+    expect(named.reply.toLowerCase()).not.toContain('tea')
+    expect(isClean(named.reply)).toBe(true)
+
+    const setNamed = handleHabitatTurn({
+      text: 'set the stretch reminder to 3pm',
+      memory,
+      tasks: pending,
+      now
+    })
+    expect(setNamed.handled).toBe(true)
+    expect(setNamed.tasks.find((task) => task.id === 'rem-1')?.dueAt).toBe(due3pm)
+    expect(isClean(setNamed.reply)).toBe(true)
+
+    const soonest = handleHabitatTurn({
+      text: 'reschedule the timer for 5:30 pm',
+      memory,
+      tasks: pending,
+      now
+    })
+    expect(soonest.handled).toBe(true)
+    expect(soonest.tasks.find((task) => task.id === 'timer-1')?.dueAt).toBe(due530)
+    expect(soonest.tasks.find((task) => task.id === 'rem-1')?.dueAt).toBe(now + 10 * 60_000)
+    expect(soonest.reply).toMatch(/Operator/)
+    expect(soonest.reply.toLowerCase()).toContain('timer')
+    expect(soonest.reply.toLowerCase()).toMatch(/5:30\s*pm|at 5:30pm/)
+    expect(isClean(soonest.reply)).toBe(true)
+
+    const miss = handleHabitatTurn({
+      text: 'move the coffee reminder to 3pm',
+      memory,
+      tasks: pending,
+      now
+    })
+    expect(miss.handled).toBe(true)
+    expect(miss.tasks).toHaveLength(3)
+    expect(miss.tasks.find((task) => task.id === 'rem-1')?.dueAt).toBe(now + 10 * 60_000)
+    expect(miss.reply.toLowerCase()).toMatch(/no pending/)
+    expect(miss.reply).toMatch(/Operator/)
+    expect(isClean(miss.reply)).toBe(true)
+
+    const create = handleHabitatTurn({
+      text: 'remind me at 3pm to stretch',
+      memory,
+      tasks: [],
+      now,
+      id: () => 'new-1'
+    })
+    expect(create.handled).toBe(true)
+    expect(create.tasks).toHaveLength(1)
+    expect(create.tasks[0]?.dueAt).toBe(due3pm)
+    expect(create.tasks[0]?.prompt.toLowerCase()).toContain('stretch')
+    expect(isClean(create.reply)).toBe(true)
+
+    const yaml = readFileSync(join(root, 'personality/ordis.v1.yaml'), 'utf8')
+    expect(yaml).toMatch(/reschedule_task/)
+    expect(yaml).toMatch(/reschedule a named one to a clock time/)
+    expect(yaml).toMatch(/move|reschedule/)
   })
 
   it('renames named and soonest pending tasks with an empty api key', () => {

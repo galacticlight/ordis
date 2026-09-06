@@ -222,6 +222,18 @@ export function isSnoozeQuery(text: string): boolean {
   return BARE_SNOOZE_RE.test(text) || NAMED_SNOOZE_RE.test(text)
 }
 
+const RESCHEDULE_CLOCK_RE =
+  /\b(?:(?:at|to|for)\s+)?(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b/i
+const BARE_RESCHEDULE_RE =
+  /\b(?:(?:move|reschedule)\s+(?:the\s+)?(?:timer|reminder)s?|set\s+(?:the\s+)?(?:timer|reminder)s?\s+to)\b/i
+const NAMED_RESCHEDULE_RE =
+  /\b(?:(?:move|reschedule)\s+(?:the\s+)?(?!timer\b|reminder\b)(.+?)\s+(?:timer|reminder)s?|set\s+(?:the\s+)?(?!timer\b|reminder\b)(.+?)\s+(?:timer|reminder)s?\s+to)\b/i
+
+export function isRescheduleQuery(text: string): boolean {
+  if (!RESCHEDULE_CLOCK_RE.test(text)) return false
+  return BARE_RESCHEDULE_RE.test(text) || NAMED_RESCHEDULE_RE.test(text)
+}
+
 const RENAME_NAMED_KIND_RE =
   /\brename\s+(?:the\s+)?(?!timer\b|reminder\b)(.+?)\s+(?:timer|reminder)s?\s+to\s+(.+)$/i
 const RENAME_BARE_KIND_RE = /\brename\s+(?:the\s+)?(?:timer|reminder)s?\s+to\s+(.+)$/i
@@ -251,6 +263,7 @@ export function looksLikeSchedule(text: string): boolean {
     isListQuery(text) ||
     isStatusQuery(text) ||
     isSnoozeQuery(text) ||
+    isRescheduleQuery(text) ||
     isRenameQuery(text) ||
     isRecallQuery(text) ||
     isForgetQuery(text) ||
@@ -494,6 +507,42 @@ function snoozeMissReply(kind: HabitatTaskKind | undefined, name: string | undef
   return 'No pending timer or reminder remains to postpone, Operator.'
 }
 
+function rescheduleName(text: string): string | undefined {
+  const named = NAMED_RESCHEDULE_RE.exec(text)
+  if (!named) return undefined
+  const raw = named[1] ?? named[2]
+  if (!raw) return undefined
+  const needle = clean(raw).replace(/^(?:the|a|an|my|this|that)\s+/i, '')
+  if (!needle || /^(?:all|the|a|an|my|this|that)$/i.test(needle)) return undefined
+  return needle.toLowerCase()
+}
+
+function rescheduleDueAt(text: string, now: number, timeZone = HABITAT_TZ): number | null {
+  const clock = RESCHEDULE_CLOCK_RE.exec(text)
+  if (!clock) return null
+  const hour = Number(clock[1])
+  const minute = clock[2] ? Number(clock[2]) : 0
+  const converted = hour24FromClock(hour, minute, clock[3] ?? 'am')
+  if (!converted) return null
+  return nextClockDue(converted.hour, converted.minute, now, timeZone)
+}
+
+export function formatRescheduleReply(task: HabitatTask, now: number): string {
+  const when = formatWhen(task.dueAt, now)
+  if (task.prompt) {
+    return `Rescheduled, Operator. The ${task.prompt} ${task.kind} is now due ${when}.`
+  }
+  return `Rescheduled, Operator. That ${task.kind} is now due ${when}.`
+}
+
+function rescheduleMissReply(kind: HabitatTaskKind | undefined, name: string | undefined): string {
+  if (name && kind) return `There is no pending ${name} ${kind} to reschedule, Operator.`
+  if (name) return `There is no pending ${name} timer or reminder to reschedule, Operator.`
+  if (kind === 'timer') return 'No pending timer remains to reschedule, Operator.'
+  if (kind === 'reminder') return 'No pending reminder remains to reschedule, Operator.'
+  return 'No pending timer or reminder remains to reschedule, Operator.'
+}
+
 function cleanRenameNeedle(raw: string | undefined): string | undefined {
   if (!raw) return undefined
   const needle = clean(raw).replace(/^(?:the|a|an|my|this|that)\s+/i, '')
@@ -693,6 +742,43 @@ export function handleHabitatTurn(input: HabitatTurnInput): HabitatTurn {
       memory,
       tasks: tasks.map((task) => (task.id === target.id ? updated : task)),
       reply: formatSnoozeReply(updated, now, { capped: delay.capped })
+    }
+  }
+
+  if (isRescheduleQuery(text)) {
+    const kind = cancelKind(text)
+    const needle = rescheduleName(text)
+    const dueAt = rescheduleDueAt(text, now)
+    if (dueAt === null) {
+      return {
+        handled: true,
+        memory,
+        tasks,
+        reply:
+          'Ordis can move a timer or reminder to a clock time without Harbor, Operator. Name a time of day — 3pm, 5:30 pm.'
+      }
+    }
+    const pool = tasks.filter((task) => !kind || task.kind === kind)
+    const matches = (
+      needle
+        ? pool.filter((task) => task.prompt.toLowerCase().includes(needle))
+        : pool
+    ).sort((a, b) => a.dueAt - b.dueAt)
+    if (matches.length === 0) {
+      return {
+        handled: true,
+        memory,
+        tasks,
+        reply: rescheduleMissReply(kind, needle)
+      }
+    }
+    const target = matches[0]!
+    const updated: HabitatTask = { ...target, dueAt }
+    return {
+      handled: true,
+      memory,
+      tasks: tasks.map((task) => (task.id === target.id ? updated : task)),
+      reply: formatRescheduleReply(updated, now)
     }
   }
 
