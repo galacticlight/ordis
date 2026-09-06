@@ -7,7 +7,9 @@ import {
   advanceRecurringTask,
   createTaskClock,
   formatFireLine,
+  formatStewardInventory,
   handleHabitatTurn,
+  isHelpQuery,
   isStatusQuery,
   isSnoozeQuery,
   isRescheduleQuery,
@@ -1053,5 +1055,49 @@ describe('mute / unmute steward TTS', () => {
     expect(html).toMatch(/id="voiceOutEnabled"[^>]*checked/)
     expect(html).toMatch(/Steward TTS \(uncheck to mute\)/)
     expect(html).toMatch(/Mute never clears Harbor/)
+  })
+})
+
+
+describe('steward inventory precept', () => {
+  it('answers what can you do with foundry, memory, mute, and Harbor status without a key', () => {
+    expect(emptyKey.apiKey).toBe('')
+    expect(isHelpQuery('what can you do')).toBe(true)
+    const memory = createMemory({ likes: ['tea'], notes: ['dock at dusk'] })
+    const tasks = [
+      { id: 'rem-1', kind: 'reminder' as const, dueAt: 10_000, prompt: 'stretch', createdAt: 0 }
+    ]
+    const help = handleHabitatTurn({
+      text: 'what can you do',
+      memory,
+      tasks,
+      now: 1_000,
+      voiceOutEnabled: false,
+      hasApiKey: false
+    })
+    expect(help.handled).toBe(true)
+    expect(help.memory).toEqual(memory)
+    expect(help.tasks).toEqual(tasks)
+    expect(isClean(help.reply)).toBe(true)
+    expect(help.reply).toMatch(/Steward inventory/)
+    expect(help.reply).toMatch(/Foundry: 1 pending/)
+    expect(help.reply).toMatch(/Memory:.*like/i)
+    expect(help.reply).toMatch(/Voice: muted/)
+    expect(help.reply).toMatch(/Speaking from local precepts/)
+    expect(help.reply).not.toMatch(/sk-|xai-|api[_-]?key/i)
+
+    const linked = formatStewardInventory({
+      tasks: [],
+      memory: createMemory(),
+      voiceOutEnabled: true,
+      hasApiKey: true
+    })
+    expect(linked).toMatch(/Foundry: empty/)
+    expect(linked).toMatch(/Voice: unmuted/)
+    expect(linked).toMatch(/Harbor linked/)
+    expect(linked).not.toMatch(/sk-|xai-/i)
+
+    const main = readFileSync(join(root, 'src/main/index.ts'), 'utf8')
+    expect(main).toContain('hasApiKey: Boolean(settings.apiKey.trim())')
   })
 })

@@ -8,6 +8,7 @@ import {
   memoryChanged,
   recallSpeech
 } from '../memory/operatorMemory'
+import { harborLinkCue } from '../harborCue'
 
 export const HABITAT_TZ = 'America/Los_Angeles'
 export const MAX_PENDING_TASKS = 20
@@ -45,6 +46,8 @@ export interface HabitatTurnInput {
   id?: () => string
   /** Current steward TTS flag; mute/unmute phrases patch this without touching Harbor or memory. */
   voiceOutEnabled?: boolean
+  /** Harbor linked when a key is stored; inventory never prints the key. */
+  hasApiKey?: boolean
 }
 
 export interface HabitatTurn {
@@ -815,6 +818,47 @@ function confirmRemember(before: OperatorMemory, after: OperatorMemory): string 
 }
 
 
+
+export function isHelpQuery(text: string): boolean {
+  return /\b(help|what can you do|commands|capabilities|what do you (?:do|offer))\b/i.test(text)
+}
+
+function memoryInventoryLine(memory: OperatorMemory): string {
+  const likes = memory.likes.length
+  const notes = memory.notes.length
+  const facts = Object.keys(memory.facts).length
+  const parts: string[] = []
+  if (likes === 1) parts.push('1 like')
+  else if (likes > 1) parts.push(`${likes} likes`)
+  if (notes === 1) parts.push('1 note')
+  else if (notes > 1) parts.push(`${notes} notes`)
+  if (facts === 1) parts.push('1 fact')
+  else if (facts > 1) parts.push(`${facts} facts`)
+  if (parts.length === 0) return 'Memory: none on file yet'
+  return `Memory: ${parts.join(', ')} on file`
+}
+
+export function formatStewardInventory(input: {
+  tasks: HabitatTask[]
+  memory: OperatorMemory
+  voiceOutEnabled: boolean
+  hasApiKey: boolean
+}): string {
+  const pending = input.tasks.length
+  const foundry =
+    pending === 0
+      ? 'Foundry: empty'
+      : pending === 1
+        ? 'Foundry: 1 pending'
+        : `Foundry: ${pending} pending`
+  const voice = input.voiceOutEnabled ? 'Voice: unmuted' : 'Voice: muted'
+  const harbor = `Harbor: ${harborLinkCue(input.hasApiKey)}`
+  return (
+    `Steward inventory, Operator - ${foundry}. ${memoryInventoryLine(input.memory)}. ${voice}. ${harbor}. ` +
+    'Timers, reminders, remember/forget, mute, and Settings Harbor stay local without a live link.'
+  )
+}
+
 export function isMuteQuery(text: string): boolean {
   return /\b(mute(?: yourself)?|be quiet|silence(?: yourself)?|stop speaking)\b/i.test(text)
 }
@@ -830,6 +874,21 @@ export function handleHabitatTurn(input: HabitatTurnInput): HabitatTurn {
   const now = input.now
   const makeId = input.id ?? (() => `task-${now}-${Math.random().toString(16).slice(2, 10)}`)
   const voiceOutEnabled = input.voiceOutEnabled !== false
+  const hasApiKey = input.hasApiKey === true
+
+  if (isHelpQuery(text)) {
+    return {
+      handled: true,
+      memory,
+      tasks,
+      reply: formatStewardInventory({
+        tasks,
+        memory,
+        voiceOutEnabled,
+        hasApiKey
+      })
+    }
+  }
 
   if (isMuteQuery(text)) {
     if (!voiceOutEnabled) {

@@ -339,7 +339,8 @@ async function runChat(text: string): Promise<void> {
     memory,
     tasks: habitatClock.snapshot(),
     now: Date.now(),
-    voiceOutEnabled: settings.voiceOutEnabled
+    voiceOutEnabled: settings.voiceOutEnabled,
+    hasApiKey: Boolean(settings.apiKey.trim())
   })
   if (habitat.handled) {
     memory = habitat.memory
