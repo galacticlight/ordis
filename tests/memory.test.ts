@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
   createMemory,
+  forgetFromUtterance,
   ingestOperatorUtterance,
+  isForgetQuery,
   rememberFact,
   rememberNote,
   summarizeMemory
@@ -45,5 +47,38 @@ describe('habitat remember phrases', () => {
     expect(memory.likes).toContain('tea')
     expect(memory.facts.work).toBe('nights')
     expect(memory.notes.some((note) => /foundry is loud/.test(note))).toBe(true)
+  })
+})
+
+describe('habitat forget phrases', () => {
+  it('removes likes, notes, and facts without touching unrelated memory', () => {
+    expect(isForgetQuery('forget that I like tea')).toBe(true)
+    expect(isForgetQuery("don't remember the foundry is loud")).toBe(true)
+    expect(isForgetQuery('clear the note about nights')).toBe(true)
+    expect(isForgetQuery("don't forget the foundry is loud")).toBe(false)
+
+    let memory = createMemory()
+    memory = ingestOperatorUtterance(memory, 'remember that I like tea')
+    memory = ingestOperatorUtterance(memory, 'remember that I like quiet')
+    memory = ingestOperatorUtterance(memory, "don't forget the foundry is loud")
+    memory = ingestOperatorUtterance(memory, 'note that I work nights')
+
+    const forgotTea = forgetFromUtterance(memory, 'forget that I like tea')
+    expect(forgotTea.removed).toEqual(['tea'])
+    expect(forgotTea.memory.likes).toEqual(['quiet'])
+    expect(forgotTea.memory.notes.some((note) => /foundry is loud/.test(note))).toBe(true)
+    expect(forgotTea.memory.facts.work).toBe('nights')
+
+    const forgotFoundry = forgetFromUtterance(forgotTea.memory, "don't remember the foundry is loud")
+    expect(forgotFoundry.removed.some((value) => /foundry is loud/.test(value))).toBe(true)
+    expect(forgotFoundry.memory.notes.some((note) => /foundry is loud/.test(note))).toBe(false)
+
+    const forgotNights = forgetFromUtterance(forgotFoundry.memory, 'clear the note about nights')
+    expect(forgotNights.removed).toContain('nights')
+    expect(forgotNights.memory.facts.work).toBeUndefined()
+    expect(forgotNights.memory.likes).toEqual(['quiet'])
+
+    const miss = forgetFromUtterance(createMemory(), 'forget that I like coffee')
+    expect(miss.removed).toEqual([])
   })
 })

@@ -1,6 +1,9 @@
 import type { OperatorMemory } from '../types'
 import {
+  forgetFromUtterance,
+  forgetReply,
   ingestOperatorUtterance,
+  isForgetQuery,
   isRecallQuery,
   memoryChanged,
   recallSpeech
@@ -220,7 +223,7 @@ export function isSnoozeQuery(text: string): boolean {
 }
 
 export function isRememberCommand(text: string): boolean {
-  if (isRecallQuery(text) || isDumpQuery(text)) return false
+  if (isRecallQuery(text) || isDumpQuery(text) || isForgetQuery(text)) return false
   return /\b(remember that|remember this|note that|don'?t forget)\b/i.test(text)
 }
 
@@ -231,6 +234,7 @@ export function looksLikeSchedule(text: string): boolean {
     isStatusQuery(text) ||
     isSnoozeQuery(text) ||
     isRecallQuery(text) ||
+    isForgetQuery(text) ||
     isRememberCommand(text)
   ) {
     return false
@@ -654,6 +658,16 @@ export function handleHabitatTurn(input: HabitatTurnInput): HabitatTurn {
       memory,
       tasks: [...tasks, task],
       reply: formatConfirmLine(task, now)
+    }
+  }
+
+  if (isForgetQuery(text)) {
+    const result = forgetFromUtterance(memory, text)
+    return {
+      handled: true,
+      memory: result.memory,
+      tasks,
+      reply: forgetReply(result.removed)
     }
   }
 

@@ -131,6 +131,9 @@ intents:
   - id: remember
     pattern: "\\b(remember that|remember this|note that|don'?t forget)\\b"
     reply: "Logged, Operator. Ordis will keep that among the habitat notes."
+  - id: forget
+    pattern: "\\b(forget(?: that)?|don'?t remember|clear (?:the )?(?:note|memory)(?: about)?)\\b"
+    reply: "If Ordis holds a matching habitat note, it will be released, Operator. Name one, and that memory is cleared."
   - id: timer
     pattern: "\\b((set )?(a )?timer)\\b"
     reply: "Ordis can hold a timer without Harbor, Operator. Name a duration, and it will chime."
@@ -154,7 +157,7 @@ intents:
     reply: "Diagnostics, Operator: integrity holding, Harbor link optional, loyalty precepts at one-hundred percent. Ordis is well enough."
   - id: help
     pattern: "\\b(help|what can you do|commands)\\b"
-    reply: "Ordis can keep you company, remember preferences, set timers and reminders, list what is on the foundry, ask how long is left, postpone or snooze a named one, cancel a named one, and speak from local precepts. Harbor (Grok) in Settings is an optional wider mind. The steward stays either way, Operator."
+    reply: "Ordis can keep you company, remember preferences, forget a matching note, set timers and reminders, list what is on the foundry, ask how long is left, postpone or snooze a named one, cancel a named one, and speak from local precepts. Harbor (Grok) in Settings is an optional wider mind. The steward stays either way, Operator."
   - id: rest
     pattern: "\\b(tired|exhausted|burn(ed)? out|need a break)\\b"
     reply: "Ordis reminds the Operator to take time for themselves. Pressure creates diamonds, yes, but it also creates rubble. Perhaps a pause."

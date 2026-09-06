@@ -73,7 +73,7 @@ export function rememberNote(memory: OperatorMemory, note: string): OperatorMemo
 }
 
 export function ingestOperatorUtterance(memory: OperatorMemory, text: string): OperatorMemory {
-  if (isRecallQuery(text)) return memory
+  if (isRecallQuery(text) || isForgetQuery(text)) return memory
   const next = createMemory(memory)
   for (const pattern of REMEMBER_PATTERNS) {
     const match = pattern.test.exec(text)
@@ -98,6 +98,103 @@ export function summarizeMemory(memory: OperatorMemory): string {
     bits.push(`${memory.notes.length} habitat notes`)
   }
   return bits.join(' · ')
+}
+
+function matchesForgetNeedle(value: string, needle: string): boolean {
+  const hay = value.toLowerCase()
+  const n = needle.toLowerCase()
+  if (!hay || !n) return false
+  return hay.includes(n) || n.includes(hay)
+}
+
+export function isForgetQuery(text: string): boolean {
+  if (/\bdon'?t forget\b/i.test(text)) return false
+  return /\b(?:forget(?:\s+that)?|don'?t\s+remember|clear\s+(?:the\s+)?(?:note|memory|fact)(?:\s+about)?)\b/i.test(
+    text
+  )
+}
+
+function extractForgetNeedle(text: string): string {
+  const like = /\b(?:forget(?:\s+that)?|don'?t\s+remember)(?:\s+that)?\s+i\s+(?:like|love|enjoy)\s+([^.!?]+)/i.exec(
+    text
+  )
+  if (like) return clean(like[1])
+
+  const dislike =
+    /\b(?:forget(?:\s+that)?|don'?t\s+remember)(?:\s+that)?\s+i\s+(?:dislike|hate|can'?t stand)\s+([^.!?]+)/i.exec(
+      text
+    )
+  if (dislike) return clean(dislike[1])
+
+  const work = /\b(?:forget(?:\s+that)?|don'?t\s+remember)(?:\s+that)?\s+i\s+work\s+([^.!?]+)/i.exec(text)
+  if (work) return clean(work[1])
+
+  const clearNote = /\bclear\s+(?:the\s+)?(?:note|memory|fact)(?:\s+about)?\s+(.+)/i.exec(text)
+  if (clearNote) {
+    return clean(clearNote[1]).replace(/^(?:that|the|a|an|my|this|about)\s+/i, '')
+  }
+
+  const forget = /\b(?:forget(?:\s+that)?|don'?t\s+remember)\s+(.+)/i.exec(text)
+  if (forget) {
+    return clean(forget[1])
+      .replace(/^(?:that|the|a|an|my|this|about)\s+/i, '')
+      .replace(/^i\s+(?:like|love|enjoy|dislike|hate|can'?t stand|work)\s+/i, '')
+  }
+
+  return ''
+}
+
+export function forgetFromUtterance(
+  memory: OperatorMemory,
+  text: string
+): { memory: OperatorMemory; removed: string[] } {
+  const next = createMemory(memory)
+  const needle = extractForgetNeedle(text)
+  const removed: string[] = []
+  if (!needle) {
+    return { memory: next, removed }
+  }
+
+  const keepLikes: string[] = []
+  for (const value of next.likes) {
+    if (matchesForgetNeedle(value, needle)) removed.push(value)
+    else keepLikes.push(value)
+  }
+  next.likes = keepLikes
+
+  const keepDislikes: string[] = []
+  for (const value of next.dislikes) {
+    if (matchesForgetNeedle(value, needle)) removed.push(value)
+    else keepDislikes.push(value)
+  }
+  next.dislikes = keepDislikes
+
+  const keepNotes: string[] = []
+  for (const value of next.notes) {
+    if (matchesForgetNeedle(value, needle)) removed.push(value)
+    else keepNotes.push(value)
+  }
+  next.notes = keepNotes
+
+  for (const [key, value] of Object.entries(next.facts)) {
+    if (matchesForgetNeedle(key, needle) || matchesForgetNeedle(value, needle)) {
+      removed.push(value)
+      delete next.facts[key]
+    }
+  }
+
+  next.updatedAt = Date.now()
+  return { memory: next, removed }
+}
+
+export function forgetReply(removed: string[]): string {
+  if (removed.length === 0) {
+    return 'Ordis holds no matching habitat note to clear, Operator.'
+  }
+  if (removed.length === 1) {
+    return `Forgotten, Operator. Ordis has released the note about ${removed[0]}.`
+  }
+  return 'Forgotten, Operator. Ordis has released those matching habitat notes.'
 }
 
 export function isRecallQuery(text: string): boolean {

@@ -353,6 +353,79 @@ describe('unharbored habitat tasks', () => {
     expect(yaml).toMatch(/push (?:the )?(?:.+ )?back|snooze/)
   })
 
+
+  it('forgets a matching like and misses calmly with an empty api key', () => {
+    expect(emptyKey.apiKey).toBe('')
+    const remembered = handleHabitatTurn({
+      text: 'remember that I like tea',
+      memory: createMemory(),
+      tasks: [],
+      now: 0
+    })
+    expect(remembered.memory.likes).toContain('tea')
+
+    const forgot = handleHabitatTurn({
+      text: 'forget that I like tea',
+      memory: remembered.memory,
+      tasks: [],
+      now: 0
+    })
+    expect(forgot.handled).toBe(true)
+    expect(forgot.memory.likes).not.toContain('tea')
+    expect(forgot.reply).toMatch(/Operator/)
+    expect(forgot.reply.toLowerCase()).toMatch(/forgotten|released|clear/)
+    expect(isClean(forgot.reply)).toBe(true)
+
+    const foundry = handleHabitatTurn({
+      text: "don't forget the foundry is loud",
+      memory: createMemory(),
+      tasks: [],
+      now: 0
+    })
+    const clearFoundry = handleHabitatTurn({
+      text: "don't remember the foundry is loud",
+      memory: foundry.memory,
+      tasks: [],
+      now: 0
+    })
+    expect(clearFoundry.handled).toBe(true)
+    expect(clearFoundry.memory.notes.some((note) => /foundry is loud/.test(note))).toBe(false)
+    expect(isClean(clearFoundry.reply)).toBe(true)
+
+    const nights = handleHabitatTurn({
+      text: 'note that I work nights',
+      memory: createMemory(),
+      tasks: [],
+      now: 0
+    })
+    const clearNights = handleHabitatTurn({
+      text: 'clear the note about nights',
+      memory: nights.memory,
+      tasks: [],
+      now: 0
+    })
+    expect(clearNights.handled).toBe(true)
+    expect(clearNights.memory.facts.work).toBeUndefined()
+    expect(isClean(clearNights.reply)).toBe(true)
+
+    const miss = handleHabitatTurn({
+      text: 'forget that I like coffee',
+      memory: createMemory(),
+      tasks: [],
+      now: 0
+    })
+    expect(miss.handled).toBe(true)
+    expect(miss.memory.likes).toEqual([])
+    expect(miss.reply).toMatch(/Operator/)
+    expect(miss.reply.toLowerCase()).toMatch(/no matching|holds no/)
+    expect(isClean(miss.reply)).toBe(true)
+
+    const yaml = readFileSync(join(root, 'personality/ordis.v1.yaml'), 'utf8')
+    expect(yaml).toMatch(/id: forget/)
+    expect(yaml).toMatch(/forget a matching note/)
+    expect(yaml).toMatch(/matching habitat note/)
+  })
+
   it('is wired in main before the Harbor apiKey check', () => {
     const main = readFileSync(join(root, 'src/main/index.ts'), 'utf8')
     const run = main.match(/async function runChat[\s\S]*?\nfunction trayIcon/)?.[0] ?? ''
