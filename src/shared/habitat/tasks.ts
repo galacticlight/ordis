@@ -16,12 +16,25 @@ export const MAX_SNOOZE_MS = 24 * 60 * 60 * 1000
 
 export type HabitatTaskKind = 'timer' | 'reminder'
 
+export type HabitatRecurrenceCadence = 'daily' | 'weekdays'
+
+export interface HabitatRecurrence {
+  cadence: HabitatRecurrenceCadence
+  hour: number
+  minute: number
+}
+
+/** Default wall time for bare "every morning" in America/Los_Angeles. */
+export const MORNING_HOUR = 8
+export const MORNING_MINUTE = 0
+
 export interface HabitatTask {
   id: string
   kind: HabitatTaskKind
   dueAt: number
   prompt: string
   createdAt: number
+  recurrence?: HabitatRecurrence
 }
 
 export interface HabitatTurnInput {
@@ -142,6 +155,74 @@ export function nextClockDue(
     due = zonedWallToEpoch(tomorrow.year, tomorrow.month, tomorrow.day, hour24, minute, timeZone)
   }
   return due
+}
+
+export function zonedWeekday(instant: number, timeZone = HABITAT_TZ): number {
+  const label = new Intl.DateTimeFormat('en-US', { timeZone, weekday: 'short' }).format(new Date(instant))
+  const map: Record<string, number> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 }
+  return map[label] ?? 0
+}
+
+export function normalizeRecurrence(raw: unknown): HabitatRecurrence | undefined {
+  if (!raw || typeof raw !== 'object') return undefined
+  const rec = raw as Record<string, unknown>
+  if (rec.cadence !== 'daily' && rec.cadence !== 'weekdays') return undefined
+  if (typeof rec.hour !== 'number' || !Number.isFinite(rec.hour)) return undefined
+  if (typeof rec.minute !== 'number' || !Number.isFinite(rec.minute)) return undefined
+  const hour = Math.trunc(rec.hour)
+  const minute = Math.trunc(rec.minute)
+  if (hour < 0 || hour > 23 || minute < 0 || minute > 59) return undefined
+  return { cadence: rec.cadence, hour, minute }
+}
+
+export function nextRecurrenceDue(
+  recurrence: HabitatRecurrence,
+  after: number,
+  timeZone = HABITAT_TZ
+): number {
+  const parts = zonedParts(after, timeZone)
+  const dayMs = 24 * 60 * 60 * 1000
+  for (let add = 0; add <= 8; add++) {
+    const noon =
+      zonedWallToEpoch(parts.year, parts.month, parts.day, 12, 0, timeZone) + add * dayMs
+    const day = zonedParts(noon, timeZone)
+    if (recurrence.cadence === 'weekdays') {
+      const weekday = zonedWeekday(noon, timeZone)
+      if (weekday < 1 || weekday > 5) continue
+    }
+    const due = zonedWallToEpoch(
+      day.year,
+      day.month,
+      day.day,
+      recurrence.hour,
+      recurrence.minute,
+      timeZone
+    )
+    if (due > after) return due
+  }
+  return nextClockDue(recurrence.hour, recurrence.minute, after, timeZone)
+}
+
+export function advanceRecurringTask(task: HabitatTask, after: number, timeZone = HABITAT_TZ): HabitatTask {
+  if (!task.recurrence) return task
+  return { ...task, dueAt: nextRecurrenceDue(task.recurrence, after, timeZone) }
+}
+
+export function formatCadence(recurrence: HabitatRecurrence): string {
+  const mer = recurrence.hour >= 12 ? 'pm' : 'am'
+  const hour12 = recurrence.hour % 12 === 0 ? 12 : recurrence.hour % 12
+  const minutes =
+    recurrence.minute === 0 ? '' : `:${String(recurrence.minute).padStart(2, '0')}`
+  const clock = `${hour12}${minutes}${mer}`
+  if (recurrence.cadence === 'weekdays') return `every weekday at ${clock}`
+  if (
+    recurrence.hour === MORNING_HOUR &&
+    recurrence.minute === MORNING_MINUTE
+  ) {
+    return 'every morning'
+  }
+  if (recurrence.hour < 12) return `every morning at ${clock}`
+  return `every day at ${clock}`
 }
 
 function durationMs(amount: number, unitRaw: string): number | null {
@@ -271,6 +352,12 @@ export function looksLikeSchedule(text: string): boolean {
   ) {
     return false
   }
+  if (
+    /\bevery\s+(morning|weekdays?|day)\b/i.test(text) &&
+    /\b(remind(?:\s+me)?|reminder|timer)\b/i.test(text)
+  ) {
+    return true
+  }
   if (/\b((?:set\s+(?:a\s+)?)?(?:timer|reminder)|remind me)\b/i.test(text)) return true
   const trimmed = text.trim()
   if (/^(?:please\s+)?in\s+\d+/i.test(trimmed)) return true
@@ -278,12 +365,56 @@ export function looksLikeSchedule(text: string): boolean {
   return false
 }
 
+function parseRecurringSchedule(
+  text: string,
+  now: number,
+  timeZone = HABITAT_TZ
+): { kind: HabitatTaskKind; dueAt: number; prompt: string; recurrence: HabitatRecurrence } | null {
+  const everyMorning = /\bevery\s+morning\b/i.test(text)
+  const everyWeekday = /\bevery\s+weekdays?\b/i.test(text)
+  const everyDay = /\bevery\s+day\b/i.test(text)
+  if (!everyMorning && !everyWeekday && !everyDay) return null
+
+  let hour = MORNING_HOUR
+  let minute = MORNING_MINUTE
+  const clock = CLOCK_RE.exec(text)
+  if (clock) {
+    const converted = hour24FromClock(
+      Number(clock[1]),
+      clock[2] ? Number(clock[2]) : 0,
+      clock[3] ?? 'am'
+    )
+    if (!converted) return null
+    hour = converted.hour
+    minute = converted.minute
+  } else if (!everyMorning && !everyWeekday) {
+    // every day needs an explicit clock; weekday defaults to morning like every morning
+    return null
+  }
+
+  const cadence: HabitatRecurrenceCadence = everyWeekday ? 'weekdays' : 'daily'
+  const recurrence: HabitatRecurrence = { cadence, hour, minute }
+  let stripped = text
+  if (clock) {
+    stripped = `${text.slice(0, clock.index)} ${text.slice(clock.index + clock[0].length)}`
+  }
+  stripped = stripped.replace(/\bevery\s+(morning|weekdays?|day)\b/gi, ' ')
+  return {
+    kind: taskKind(text, true),
+    dueAt: nextRecurrenceDue(recurrence, now, timeZone),
+    prompt: extractPrompt(stripped),
+    recurrence
+  }
+}
+
 export function parseSchedule(
   text: string,
   now: number,
   timeZone = HABITAT_TZ
-): { kind: HabitatTaskKind; dueAt: number; prompt: string } | null {
+): { kind: HabitatTaskKind; dueAt: number; prompt: string; recurrence?: HabitatRecurrence } | null {
   if (!looksLikeSchedule(text)) return null
+  const recurring = parseRecurringSchedule(text, now, timeZone)
+  if (recurring) return recurring
   const clock = CLOCK_RE.exec(text)
   if (clock) {
     const hour = Number(clock[1])
@@ -324,7 +455,10 @@ export function normalizeTasks(raw: unknown): HabitatTask[] {
     const id = typeof rec.id === 'string' && rec.id.length > 0 ? rec.id : `task-${out.length}`
     const createdAt =
       typeof rec.createdAt === 'number' && Number.isFinite(rec.createdAt) ? rec.createdAt : rec.dueAt
-    out.push({ id, kind: rec.kind, dueAt: rec.dueAt, prompt, createdAt })
+    const recurrence = normalizeRecurrence(rec.recurrence)
+    const task: HabitatTask = { id, kind: rec.kind, dueAt: rec.dueAt, prompt, createdAt }
+    if (recurrence) task.recurrence = recurrence
+    out.push(task)
     if (out.length >= MAX_PENDING_TASKS) break
   }
   return out
@@ -378,6 +512,13 @@ export function formatFireLine(task: HabitatTask): string {
 
 export function formatConfirmLine(task: HabitatTask, now: number): string {
   const when = formatWhen(task.dueAt, now)
+  if (task.recurrence) {
+    const cadence = formatCadence(task.recurrence)
+    if (task.prompt) {
+      return `A recurring reminder to ${task.prompt} ${cadence} is set, Operator. Next ${when}.`
+    }
+    return `A recurring reminder ${cadence} is set, Operator. Next ${when}.`
+  }
   if (task.kind === 'timer') {
     return `It is done, Operator. Ordis will chime ${when}.`
   }
@@ -411,6 +552,9 @@ function findDuplicateNamed(
 
 export function formatDuplicateFoundryReply(task: HabitatTask, now: number): string {
   const when = formatWhen(task.dueAt, now)
+  if (task.recurrence && task.prompt) {
+    return `That ${task.prompt} recurring ${task.kind} is already on the foundry, Operator. Next ${when}.`
+  }
   if (task.prompt) {
     return `That ${task.prompt} ${task.kind} is already on the foundry, Operator. It is due ${when}.`
   }
@@ -446,6 +590,11 @@ function joinEnglish(parts: string[]): string {
 
 function formatPendingLine(task: HabitatTask, now: number): string {
   const when = formatWhen(task.dueAt, now)
+  if (task.recurrence) {
+    const cadence = formatCadence(task.recurrence)
+    if (task.prompt) return `a recurring reminder to ${task.prompt} ${cadence}, next ${when}`
+    return `a recurring reminder ${cadence}, next ${when}`
+  }
   if (task.kind === 'timer') {
     return task.prompt ? `a timer to ${task.prompt} ${when}` : `a timer ${when}`
   }
@@ -865,7 +1014,7 @@ export function handleHabitatTurn(input: HabitatTurnInput): HabitatTurn {
         memory,
         tasks,
         reply:
-          'Ordis can hold a timer or reminder without Harbor, Operator. Name a duration or a time of day — in twenty minutes, at 3pm.'
+          'Ordis can hold a timer or reminder without Harbor, Operator. Name a duration, a time of day, or a cadence — in twenty minutes, at 3pm, every morning, every weekday at 9am.'
       }
     }
     if (tasks.length >= MAX_PENDING_TASKS) {
@@ -893,6 +1042,7 @@ export function handleHabitatTurn(input: HabitatTurnInput): HabitatTurn {
       prompt: parsed.prompt,
       createdAt: now
     }
+    if (parsed.recurrence) task.recurrence = parsed.recurrence
     return {
       handled: true,
       memory,
@@ -954,6 +1104,14 @@ export function createTaskClock(io: TaskClockIo): {
       handles.delete(task.id)
       const found = tasks.find((item) => item.id === task.id)
       if (!found) return
+      if (found.recurrence) {
+        const advanced = advanceRecurringTask(found, Math.max(io.now(), found.dueAt))
+        tasks = tasks.map((item) => (item.id === found.id ? advanced : item))
+        io.persist(tasks)
+        io.onFire(found)
+        arm(advanced)
+        return
+      }
       tasks = tasks.filter((item) => item.id !== task.id)
       io.persist(tasks)
       io.onFire(found)
@@ -970,8 +1128,21 @@ export function createTaskClock(io: TaskClockIo): {
 
   return {
     restore(next: HabitatTask[]): void {
-      const { due, pending } = takeDue(normalizeTasks(next), io.now())
-      replace(pending)
+      const now = io.now()
+      const normalized = normalizeTasks(next)
+      const due: HabitatTask[] = []
+      const pending: HabitatTask[] = []
+      for (const task of normalized) {
+        if (task.dueAt <= now) {
+          due.push(task)
+          if (task.recurrence) {
+            pending.push(advanceRecurringTask(task, Math.max(now, task.dueAt)))
+          }
+        } else {
+          pending.push(task)
+        }
+      }
+      replace(pending.slice(0, MAX_PENDING_TASKS))
       for (const task of due) io.onFire(task)
     },
     replace,

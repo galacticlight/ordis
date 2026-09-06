@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { createMemory, ingestOperatorUtterance, recallSpeech } from '@shared/memory/operatorMemory'
 import { isClean } from '@shared/personality/traps'
 import {
+  advanceRecurringTask,
   createTaskClock,
   formatFireLine,
   handleHabitatTurn,
@@ -13,7 +14,9 @@ import {
   isRenameQuery,
   MAX_PENDING_TASKS,
   MAX_SNOOZE_MS,
+  MORNING_HOUR,
   nextClockDue,
+  nextRecurrenceDue,
   parseSchedule,
   takeDue,
   playbackAllowed,
@@ -594,6 +597,129 @@ describe('unharbored habitat tasks', () => {
 
     const yaml = readFileSync(join(root, 'personality/ordis.v1.yaml'), 'utf8')
     expect(yaml).toMatch(/skip a duplicate named one already on the foundry/)
+  })
+
+  it('schedules every-morning recurring reminders, lists next fire, advances on fire, and cancels with an empty api key', () => {
+    expect(emptyKey.apiKey).toBe('')
+    const memory = createMemory()
+    // Mon 8:00am PT — today's morning slot is not strictly after now, so next is Tue 8am PT.
+    const now = Date.parse('2026-08-31T15:00:00.000Z')
+    const created = handleHabitatTurn({
+      text: 'every morning remind me to stretch',
+      memory,
+      tasks: [],
+      now,
+      id: () => 'rec-1'
+    })
+    expect(created.handled).toBe(true)
+    expect(created.tasks).toHaveLength(1)
+    expect(created.tasks[0]?.kind).toBe('reminder')
+    expect(created.tasks[0]?.prompt.toLowerCase()).toContain('stretch')
+    expect(created.tasks[0]?.recurrence).toEqual({
+      cadence: 'daily',
+      hour: MORNING_HOUR,
+      minute: 0
+    })
+    const nextMorning = nextRecurrenceDue(
+      { cadence: 'daily', hour: MORNING_HOUR, minute: 0 },
+      now
+    )
+    expect(created.tasks[0]?.dueAt).toBe(nextMorning)
+    expect(created.reply.toLowerCase()).toMatch(/recurr|every morning/)
+    expect(created.reply).toMatch(/Operator/)
+    expect(isClean(created.reply)).toBe(true)
+
+    const listed = handleHabitatTurn({
+      text: "what's on the foundry",
+      memory,
+      tasks: created.tasks,
+      now
+    })
+    expect(listed.handled).toBe(true)
+    expect(listed.tasks).toHaveLength(1)
+    expect(listed.reply.toLowerCase()).toContain('stretch')
+    expect(listed.reply.toLowerCase()).toMatch(/next|every morning|recurr/)
+    expect(isClean(listed.reply)).toBe(true)
+
+    const weekday = handleHabitatTurn({
+      text: 'every weekday at 9am remind me to hydrate',
+      memory,
+      tasks: [],
+      now,
+      id: () => 'rec-wd'
+    })
+    expect(weekday.handled).toBe(true)
+    expect(weekday.tasks[0]?.recurrence).toEqual({ cadence: 'weekdays', hour: 9, minute: 0 })
+    expect(weekday.tasks[0]?.dueAt).toBe(
+      nextRecurrenceDue({ cadence: 'weekdays', hour: 9, minute: 0 }, now)
+    )
+    expect(weekday.reply.toLowerCase()).toMatch(/weekday|recurr/)
+    expect(isClean(weekday.reply)).toBe(true)
+
+    const dup = handleHabitatTurn({
+      text: 'every morning remind me to stretch',
+      memory,
+      tasks: created.tasks,
+      now: now + 60_000,
+      id: () => 'rec-2'
+    })
+    expect(dup.handled).toBe(true)
+    expect(dup.tasks).toHaveLength(1)
+    expect(dup.tasks).toEqual(created.tasks)
+    expect(dup.reply.toLowerCase()).toMatch(/already/)
+    expect(isClean(dup.reply)).toBe(true)
+
+    vi.useFakeTimers()
+    vi.setSystemTime(created.tasks[0]!.dueAt)
+    const fired: HabitatTask[] = []
+    let persisted: HabitatTask[] = []
+    const clock = createTaskClock({
+      now: () => Date.now(),
+      setTimeout,
+      clearTimeout: (id) => {
+        clearTimeout(id as ReturnType<typeof setTimeout>)
+      },
+      persist: (tasks) => {
+        persisted = tasks
+      },
+      onFire: (task) => fired.push(task)
+    })
+    clock.replace(created.tasks)
+    expect(fired).toHaveLength(0)
+    vi.advanceTimersByTime(0)
+    expect(fired).toHaveLength(1)
+    expect(fired[0]?.prompt.toLowerCase()).toContain('stretch')
+    expect(fired[0]?.recurrence?.cadence).toBe('daily')
+    expect(clock.snapshot()).toHaveLength(1)
+    expect(persisted).toHaveLength(1)
+    const advancedDue = nextRecurrenceDue(
+      { cadence: 'daily', hour: MORNING_HOUR, minute: 0 },
+      created.tasks[0]!.dueAt
+    )
+    expect(clock.snapshot()[0]?.dueAt).toBe(advancedDue)
+    expect(clock.snapshot()[0]?.dueAt).toBeGreaterThan(created.tasks[0]!.dueAt)
+    expect(advanceRecurringTask(created.tasks[0]!, created.tasks[0]!.dueAt).dueAt).toBe(
+      advancedDue
+    )
+    const pendingAfterFire = clock.snapshot()
+    clock.stop()
+    vi.useRealTimers()
+
+    const cleared = handleHabitatTurn({
+      text: 'cancel the stretch reminder',
+      memory,
+      tasks: pendingAfterFire,
+      now: advancedDue
+    })
+    expect(cleared.handled).toBe(true)
+    expect(cleared.tasks).toHaveLength(0)
+    expect(cleared.reply.toLowerCase()).toContain('cancel')
+    expect(isClean(cleared.reply)).toBe(true)
+
+    const yaml = readFileSync(join(root, 'personality/ordis.v1.yaml'), 'utf8')
+    expect(yaml).toMatch(/recurring_reminder/)
+    expect(yaml).toMatch(/every morning|weekday/)
+    expect(yaml).toMatch(/set a recurring reminder every morning or weekday/)
   })
 
   it('forgets a matching like and misses calmly with an empty api key', () => {
