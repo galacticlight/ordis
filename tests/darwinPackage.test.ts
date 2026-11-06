@@ -5,11 +5,12 @@ import { describe, expect, it } from "vitest"
 const root = process.cwd()
 
 describe("darwin-arm64 package job", () => {
-  it("runs electron-builder on macos-14 for arm64 and uploads Ordis.app", () => {
+  it("runs electron-builder on macos-15 for arm64 and uploads Ordis.app", () => {
     const ci = readFileSync(join(root, ".github/workflows/ci.yml"), "utf8")
     const builder = readFileSync(join(root, "electron-builder.yml"), "utf8")
     const pkg = readFileSync(join(root, "package.json"), "utf8")
-    expect(ci).toMatch(/runs-on:\s*macos-14/)
+    expect(ci).toMatch(/runs-on:\s*macos-15/)
+    expect(ci).not.toMatch(/runs-on:\s*macos-14/)
     expect(ci).toContain("npx electron-builder --mac dir --arm64")
     expect(ci).toContain("CSC_IDENTITY_AUTO_DISCOVERY")
     expect(ci).toContain("ordis-darwin-arm64")
