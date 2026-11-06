@@ -107,6 +107,18 @@ describe('avatar motion envelopes', () => {
     expect(rippleAmpFromVoice(1, true)).toBeLessThanOrEqual(1)
     expect(rippleAmpFromVoice(0.8, false)).toBeCloseTo(0.8 * MOTION.voiceAmpToRipple, 5)
   })
+
+  it('keeps speak-floor wobble and halo lerp tunable via MOTION', async () => {
+    expect(MOTION.speakFloorWobbleA).toBeGreaterThan(0)
+    expect(MOTION.speakFloorWobbleB).toBeGreaterThan(0)
+    expect(MOTION.haloLerpPerSec).toBeGreaterThan(0)
+    const { readFileSync } = await import('node:fs')
+    const { join } = await import('node:path')
+    const src = readFileSync(join(process.cwd(), 'src/renderer/src/avatar/OrdisAvatar.ts'), 'utf8')
+    expect(src).toContain('MOTION.speakFloorWobbleA')
+    expect(src).toContain('MOTION.haloLerpPerSec')
+    expect(src).not.toMatch(/dt \* 4\b/)
+  })
 })
 
 describe('avatar motion source guards', () => {

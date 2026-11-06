@@ -46,6 +46,12 @@ export const MOTION = {
   voiceAmpToRipple: 0.9,
   /** Per-ring speed jitter (±); keeps propagation from looking mechanical. */
   speakRippleSpeedJitter: 0.08,
+  /** Organic speak-floor wobble (radians/sec-ish via sin(t * hz)). */
+  speakFloorWobbleA: 0.1,
+  speakFloorWobbleHzA: 5.1,
+  speakFloorWobbleB: 0.05,
+  speakFloorWobbleHzB: 2.3,
+  haloLerpPerSec: 4,
   idleIntensity: 0.4,
   idleMicroCaustic: 0.04,
   idleMicroCausticHzA: 0.7,
@@ -465,7 +471,9 @@ export class OrdisAvatar {
     this.voiceAmp = decayVoiceAmp(this.voiceAmp, dt)
     if (this.status === 'speaking') {
       // Soft speech-shaped floor when TTS amp has not arrived yet, plus a slow organic wobble.
-      const wobble = 0.1 * Math.sin(t * 5.1) + 0.05 * Math.sin(t * 2.3 + 0.7)
+      const wobble =
+        MOTION.speakFloorWobbleA * Math.sin(t * MOTION.speakFloorWobbleHzA) +
+        MOTION.speakFloorWobbleB * Math.sin(t * MOTION.speakFloorWobbleHzB + 0.7)
       amp = Math.max(amp, MOTION.speakEnvelope + wobble)
     }
     const pulse = softCorePulse(t, this.status === 'speaking' ? amp : 0)
@@ -485,7 +493,8 @@ export class OrdisAvatar {
     // TODO(voice-in): on-device STT can drive status==='listening' later. Keep dormant —
     // do not wire mic / Web Speech here; halo tween stays ready for that day.
     const haloTarget = this.status === 'listening' ? MOTION.listenHaloScale : 1
-    const haloNow = this.halo.scale.x + (haloTarget - this.halo.scale.x) * Math.min(1, dt * 4)
+    const haloNow =
+      this.halo.scale.x + (haloTarget - this.halo.scale.x) * Math.min(1, dt * MOTION.haloLerpPerSec)
     this.halo.scale.setScalar(haloNow)
 
     if (this.status === 'thinking') {
