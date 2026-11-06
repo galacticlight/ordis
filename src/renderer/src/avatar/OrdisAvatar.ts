@@ -17,16 +17,39 @@ export const PALETTE = {
 export const MOTION = {
   idleBreathWorld: 0.002,
   idleBreathPeriod: 12,
+  /** Secondary / tertiary layers stay normalized so peak ≤ idleBreathWorld. */
+  idleBreathSecondary: 0.34,
+  idleBreathSecondaryPeriod: 7.3,
+  idleBreathTertiary: 0.18,
+  idleBreathTertiaryPeriod: 19.7,
   idlePrecessionRad: (2 * Math.PI) / 180,
   idlePrecessionPeriod: 20,
+  /** Slow irregular drift mixed into yaw/pitch (weights sum ≤ 1 with primary). */
+  idlePrecessionDrift: 0.22,
+  idlePrecessionDriftPeriod: 33,
   corePulseHz: 0.15,
   corePulseAmt: 0.015,
+  /** Extra emissive lift while speaking, scaled by voice envelope. */
+  corePulseSpeakBoost: 0.012,
   listenHaloScale: 1.04,
   thinkSpinRadPerSec: (4 * Math.PI) / 180,
-  speakRippleLife: 0.9,
+  speakRippleLife: 1.05,
   speakRippleGap: 1.05,
+  /** Louder voice shortens the gap toward this floor (still ≥ life * speakRippleGapFloorFrac). */
+  speakRippleGapFloorFrac: 0.72,
+  speakRippleAmpGapScale: 0.38,
   speakEnvelope: 0.38,
-  idleIntensity: 0.4
+  speakAmpGain: 5,
+  speakAmpDecay: 3.2,
+  speakAmpFloor: 0.45,
+  /** How strongly live voiceAmp drives ripple opacity vs the speak floor. */
+  voiceAmpToRipple: 0.9,
+  /** Per-ring speed jitter (±); keeps propagation from looking mechanical. */
+  speakRippleSpeedJitter: 0.08,
+  idleIntensity: 0.4,
+  idleMicroCaustic: 0.04,
+  idleMicroCausticHzA: 0.7,
+  idleMicroCausticHzB: 1.13
 } as const
 
 export const OVERLAY_FRUSTUM = { width: 420, height: 640 } as const
@@ -36,6 +59,84 @@ export const CAMERA_POSE = {
   fov: 30,
   position: [1.48, 0.92, 3.95] as const,
   lookAt: [0, 0.06, 0] as const
+}
+
+/** Hermite smoothstep on [0,1]. */
+export function smoothstep01(x: number): number {
+  const t = Math.min(1, Math.max(0, x))
+  return t * t * (3 - 2 * t)
+}
+
+/** Soft attack/sustain/release from normalized life 0→1 (expanding ripple). */
+export function rippleFadeEnvelope(life01: number): number {
+  const life = Math.min(1, Math.max(0, life01))
+  // Quick soft attack, then a smooth ease-out release (not linear).
+  const attack = smoothstep01(life / 0.12)
+  const release = 1 - smoothstep01((life - 0.18) / 0.82)
+  return attack * Math.max(0, release)
+}
+
+/** Layered, amplitude-normalized breath offset in world units. */
+export function idleBreathOffset(t: number): number {
+  const w1 = 1
+  const w2 = MOTION.idleBreathSecondary
+  const w3 = MOTION.idleBreathTertiary
+  const norm = w1 + w2 + w3
+  const primary = Math.sin((t * Math.PI * 2) / MOTION.idleBreathPeriod)
+  const secondary = Math.sin((t * Math.PI * 2) / MOTION.idleBreathSecondaryPeriod)
+  const tertiary = Math.sin((t * Math.PI * 2) / MOTION.idleBreathTertiaryPeriod + 1.1)
+  return ((w1 * primary + w2 * secondary + w3 * tertiary) / norm) * MOTION.idleBreathWorld
+}
+
+/** Slow precession with a quieter irregular drift so it is not a turntable. */
+export function idlePrecession(t: number): { yaw: number; pitch: number } {
+  const rad = MOTION.idlePrecessionRad
+  const drift = MOTION.idlePrecessionDrift
+  const primary = 1 - drift
+  const yaw =
+    Math.sin((t * Math.PI * 2) / MOTION.idlePrecessionPeriod) * rad * primary +
+    Math.sin((t * Math.PI * 2) / MOTION.idlePrecessionDriftPeriod + 0.35) * rad * drift
+  const pitch =
+    Math.cos((t * Math.PI * 2) / (MOTION.idlePrecessionPeriod * 1.15)) * rad * 0.4 * primary +
+    Math.cos((t * Math.PI * 2) / (MOTION.idlePrecessionDriftPeriod * 0.87) + 0.6) * rad * 0.15 * drift
+  return { yaw, pitch }
+}
+
+/** Soft core pulse; speakAmp (0..1) lifts the peak gently. */
+export function softCorePulse(t: number, speakAmp = 0): number {
+  const wave = Math.sin(t * MOTION.corePulseHz * Math.PI * 2)
+  // Soften peaks: mix sine with a flattened cousin so attack/release feel rounder.
+  const soft = wave * 0.72 + Math.sin(wave * Math.PI * 0.5) * 0.28
+  const speak = Math.min(1, Math.max(0, speakAmp)) * MOTION.corePulseSpeakBoost
+  return 1 + soft * MOTION.corePulseAmt + speak
+}
+
+/** Peak-hold decay for voice RMS driving the mercury and ripples. */
+export function decayVoiceAmp(amp: number, dt: number): number {
+  return amp * Math.exp(-Math.max(0, dt) * MOTION.speakAmpDecay)
+}
+
+/** Map raw RMS into the avatar voice envelope (0..1). */
+export function gainVoiceAmp(rms: number): number {
+  return Math.min(1, Math.max(0, rms) * MOTION.speakAmpGain)
+}
+
+/**
+ * Effective gap between ripple starts. Louder speech pulses a bit faster
+ * while staying at or above speakRippleLife * speakRippleGapFloorFrac.
+ */
+export function effectiveRippleGap(amp: number): number {
+  const a = Math.min(1, Math.max(0, amp))
+  const floor = MOTION.speakRippleLife * MOTION.speakRippleGapFloorFrac
+  const shortened = MOTION.speakRippleGap * (1 - a * MOTION.speakRippleAmpGapScale)
+  return Math.max(floor, shortened)
+}
+
+/** Ripple opacity driver from live voice + speak floor. */
+export function rippleAmpFromVoice(voiceAmp: number, speaking: boolean): number {
+  const live = Math.min(1, Math.max(0, voiceAmp)) * MOTION.voiceAmpToRipple
+  if (!speaking) return live
+  return Math.max(MOTION.speakAmpFloor, MOTION.speakEnvelope + live * (1 - MOTION.speakEnvelope))
 }
 
 const RIPPLE_VERT = /* glsl */ `
@@ -49,18 +150,31 @@ void main() {
 const RIPPLE_FRAG = /* glsl */ `
 uniform float uLife;
 uniform float uAmp;
+uniform float uSpeed;
 varying vec2 vUv;
 void main() {
   vec2 p = vUv - 0.5;
   float r = length(p) * 2.0;
-  float ringR = uLife * 1.35;
+  // Smooth expansion (ease-in-out) so the ring does not pop out linearly.
+  float expand = uLife * uLife * (3.0 - 2.0 * uLife);
+  float ringR = expand * 1.35 * uSpeed;
+  float bandW = 0.045 + 0.035 * uAmp;
   float ring = abs(r - ringR);
-  float band = 1.0 - smoothstep(0.0, 0.055, ring);
-  float fade = (1.0 - uLife) * 0.35 * uAmp;
-  float alpha = band * fade;
+  // Soft gaussian primary front instead of a hard band.
+  float band = exp(-(ring * ring) / (bandW * bandW * 0.55));
+  // Faint trailing front for propagation feel.
+  float trailR = ringR * 0.78;
+  float trailW = bandW * 1.35;
+  float trail = exp(-((r - trailR) * (r - trailR)) / (trailW * trailW)) * (0.28 + 0.22 * uAmp);
+  float disk = 1.0 - smoothstep(0.92, 1.38, r);
+  // Soft ASR fade: quick attack, eased release.
+  float attack = smoothstep(0.0, 0.12, uLife);
+  float release = 1.0 - smoothstep(0.18, 1.0, uLife);
+  float fade = attack * release * (0.2 + 0.55 * uAmp);
+  float alpha = (band + trail) * fade * disk;
   vec3 gold = vec3(0.769, 0.643, 0.416);
   vec3 cyan = vec3(0.494, 0.722, 0.706);
-  vec3 color = mix(cyan, gold, smoothstep(0.0, 0.04, ring));
+  vec3 color = mix(cyan, gold, smoothstep(0.0, bandW, ring));
   gl_FragColor = vec4(color, alpha);
 }
 `
@@ -192,7 +306,8 @@ function makeRipple(): THREE.Mesh {
   const mat = new THREE.ShaderMaterial({
     uniforms: {
       uLife: { value: 1 },
-      uAmp: { value: 0 }
+      uAmp: { value: 0 },
+      uSpeed: { value: 1 }
     },
     vertexShader: RIPPLE_VERT,
     fragmentShader: RIPPLE_FRAG,
@@ -223,11 +338,14 @@ export class OrdisAvatar {
   private readonly glowMat: THREE.MeshBasicMaterial
   private readonly ripples: THREE.Mesh[]
   private readonly rippleAge: number[]
+  private readonly rippleSpeed: number[]
   private status: CompanionStatus = 'idle'
   private voiceAmp = 0
   private raf = 0
   private disposed = false
   private idleSkip = 0
+  /** Deterministic phase salt so speed jitter is stable per ring index. */
+  private rippleSalt = 0
 
   constructor(canvas: HTMLCanvasElement) {
     this.renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true, powerPreference: 'low-power' })
@@ -261,6 +379,7 @@ export class OrdisAvatar {
     this.glowMat = this.glow.material as THREE.MeshBasicMaterial
     this.ripples = [makeRipple(), makeRipple(), makeRipple()]
     this.rippleAge = [1, 1, 1]
+    this.rippleSpeed = [1, 1, 1]
     for (const ripple of this.ripples) this.scene.add(ripple)
     this.loop = this.loop.bind(this)
     this.raf = requestAnimationFrame(this.loop)
@@ -271,7 +390,7 @@ export class OrdisAvatar {
   }
 
   setVoiceAmp(rms: number): void {
-    const next = Math.min(1, Math.max(0, rms) * 5)
+    const next = gainVoiceAmp(rms)
     if (next > this.voiceAmp) this.voiceAmp = next
   }
 
@@ -302,11 +421,18 @@ export class OrdisAvatar {
     const mesh = this.ripples[idx]
     if (!mesh) return
     this.rippleAge[idx] = 0
+    this.rippleSalt += 1
+    // Organic per-ring speed variance; salt keeps successive rings from matching.
+    const jitter =
+      Math.sin(this.rippleSalt * 12.9898 + idx * 78.233) * MOTION.speakRippleSpeedJitter
+    const speed = 1 + jitter
+    this.rippleSpeed[idx] = speed
     mesh.visible = true
     mesh.position.copy(this.seal.position)
     const mat = mesh.material as THREE.ShaderMaterial
     mat.uniforms.uLife!.value = 0
     mat.uniforms.uAmp!.value = amp
+    mat.uniforms.uSpeed!.value = speed
   }
 
   private loop(): void {
@@ -314,6 +440,8 @@ export class OrdisAvatar {
     this.raf = requestAnimationFrame(this.loop)
     const dt = this.clock.getDelta()
     const t = this.clock.elapsedTime
+    // Idle / low-power: skip every other paint. Motion stays time-based via the clock
+    // so resumed frames stay continuous (not frame-counted).
     if (this.status === 'idle') {
       this.idleSkip += 1
       if (this.idleSkip % 2 === 1) {
@@ -328,26 +456,34 @@ export class OrdisAvatar {
   }
 
   private tickMotion(t: number, dt: number): void {
-    const breath = Math.sin((t * Math.PI * 2) / MOTION.idleBreathPeriod) * MOTION.idleBreathWorld
-    const yaw = Math.sin((t * Math.PI * 2) / MOTION.idlePrecessionPeriod) * MOTION.idlePrecessionRad
-    const pitch = Math.cos((t * Math.PI * 2) / (MOTION.idlePrecessionPeriod * 1.15)) * MOTION.idlePrecessionRad * 0.4
+    const breath = idleBreathOffset(t)
+    const { yaw, pitch } = idlePrecession(t)
     this.seal.position.set(SEAL_POSITION[0], SEAL_POSITION[1] + breath, SEAL_POSITION[2])
     this.seal.rotation.set(pitch, yaw, 0)
 
-    const pulse = 1 + Math.sin(t * MOTION.corePulseHz * Math.PI * 2) * MOTION.corePulseAmt
-    const idleMul = this.status === 'idle' ? MOTION.idleIntensity : 1
     let amp = this.voiceAmp
-    this.voiceAmp *= Math.exp(-dt * 3.2)
+    this.voiceAmp = decayVoiceAmp(this.voiceAmp, dt)
     if (this.status === 'speaking') {
-      amp = Math.max(amp, MOTION.speakEnvelope + 0.14 * Math.sin(t * 5.5))
+      // Soft speech-shaped floor when TTS amp has not arrived yet, plus a slow organic wobble.
+      const wobble = 0.1 * Math.sin(t * 5.1) + 0.05 * Math.sin(t * 2.3 + 0.7)
+      amp = Math.max(amp, MOTION.speakEnvelope + wobble)
     }
+    const pulse = softCorePulse(t, this.status === 'speaking' ? amp : 0)
+    const idleMul = this.status === 'idle' ? MOTION.idleIntensity : 1
     this.mercuryMat.emissiveIntensity = 0.42 * pulse * idleMul * (this.status === 'thinking' ? 0.8 : 1)
     this.glowMat.opacity = 0.32 * pulse * idleMul
     this.coreLight.intensity = 1.2 * pulse * idleMul
-    const caustic = 1 + 0.04 * idleMul * Math.sin(t * 0.7) * Math.sin(t * 1.13 + 0.4)
+    const caustic =
+      1 +
+      MOTION.idleMicroCaustic *
+        idleMul *
+        Math.sin(t * MOTION.idleMicroCausticHzA) *
+        Math.sin(t * MOTION.idleMicroCausticHzB + 0.4)
     this.mercury.scale.setScalar(caustic)
     this.glow.scale.setScalar(0.92 + 0.08 * pulse)
 
+    // TODO(voice-in): on-device STT can drive status==='listening' later. Keep dormant —
+    // do not wire mic / Web Speech here; halo tween stays ready for that day.
     const haloTarget = this.status === 'listening' ? MOTION.listenHaloScale : 1
     const haloNow = this.halo.scale.x + (haloTarget - this.halo.scale.x) * Math.min(1, dt * 4)
     this.halo.scale.setScalar(haloNow)
@@ -358,7 +494,8 @@ export class OrdisAvatar {
 
     if (this.status === 'speaking') {
       const youngest = Math.min(...this.rippleAge)
-      if (youngest >= MOTION.speakRippleGap) this.startRipple(Math.max(0.45, amp))
+      const gap = effectiveRippleGap(amp)
+      if (youngest >= gap) this.startRipple(rippleAmpFromVoice(amp, true))
     }
     for (let i = 0; i < this.ripples.length; i += 1) {
       const mesh = this.ripples[i]
@@ -368,6 +505,12 @@ export class OrdisAvatar {
       const life = Math.min(1, age / MOTION.speakRippleLife)
       const mat = mesh.material as THREE.ShaderMaterial
       mat.uniforms.uLife!.value = life
+      // Keep amp coupled while the ring lives so late TTS peaks still brighten it.
+      if (mesh.visible && this.status === 'speaking') {
+        const live = rippleAmpFromVoice(amp, true)
+        const held = mat.uniforms.uAmp!.value as number
+        mat.uniforms.uAmp!.value = Math.max(held, live)
+      }
       mesh.quaternion.copy(this.camera.quaternion)
       mesh.position.copy(this.seal.position)
       if (life >= 1) mesh.visible = false
