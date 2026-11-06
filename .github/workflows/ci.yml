@@ -35,7 +35,7 @@ jobs:
 
   package-darwin-arm64:
     name: darwin-arm64 package
-    runs-on: macos-14
+    runs-on: macos-15
     needs: quality
     steps:
       - uses: actions/checkout@v4
