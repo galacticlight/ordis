@@ -8,13 +8,13 @@ MODE="${1:-overlay}"
 
 need_npm() {
   if ! command -v npm >/dev/null 2>&1; then
-    echo "Ordis needs Node.js and npm. Install Node from https://nodejs.org and try again."
+    echo "Ordis needs Node.js and npm. Install Node from https://nodejs.org and try again." >&2
     read -r -p "Press Return to close." _
     exit 1
   fi
   if [[ ! -d node_modules ]]; then
-    echo "Installing Ordis dependencies (first launch)..."
-    npm install
+    echo "Installing Ordis dependencies (first launch)..." >&2
+    npm install >&2
   fi
 }
 
@@ -50,14 +50,14 @@ ensure_app() {
     return 0
   fi
   if [[ "$(uname -s)" != Darwin ]]; then
-    echo "Ordis.app is a macOS darwin-arm64 build. Run this launcher on the Operator's Mac."
+    echo "Ordis.app is a macOS darwin-arm64 build. Run this launcher on the Operator's Mac." >&2
     exit 1
   fi
   need_npm
-  echo "Building Ordis.app (darwin-arm64). This can take a few minutes the first time..."
-  npm run package:darwin-arm64
+  echo "Building Ordis.app (darwin-arm64). This can take a few minutes the first time..." >&2
+  npm run package:darwin-arm64 >&2
   if ! app="$(find_app)"; then
-    echo "The packaged app was not found under release/mac-arm64/Ordis.app."
+    echo "The packaged app was not found under release/mac-arm64/Ordis.app." >&2
     exit 1
   fi
   printf '%s\n' "$app"

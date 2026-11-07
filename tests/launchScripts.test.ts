@@ -23,6 +23,9 @@ describe('mac launch helpers', () => {
     expect(helper).toContain('app_supports_mercury')
     expect(helper).toContain('resolveMercuryFlag')
     expect(helper).toContain('does not understand --mercury=raymarch')
+    expect(helper).toContain('echo "Building Ordis.app (darwin-arm64). This can take a few minutes the first time..." >&2')
+    expect(helper).toContain('npm run package:darwin-arm64 >&2')
+    expect(helper).toContain('npm install >&2')
   })
 
   it('does not loosen sandbox, contextIsolation, or safeStorage', () => {
