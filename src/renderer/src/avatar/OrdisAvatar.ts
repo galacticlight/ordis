@@ -167,6 +167,17 @@ export function rippleAmpFromVoice(voiceAmp: number, speaking: boolean): number 
   return Math.max(MOTION.speakAmpFloor, MOTION.speakEnvelope + live * (1 - MOTION.speakEnvelope))
 }
 
+/**
+ * Raymarch field ripple amplitude. Dying rings keep their held amp so the
+ * shader ASR envelope can finish after speech ends — never cliff to 0 mid-life.
+ */
+export function raymarchRippleAmp(life: number, heldAmp: number, speaking: boolean, voiceAmp: number): number {
+  if (life >= 1) return 0
+  const held = Math.max(0, heldAmp)
+  if (speaking) return Math.max(held, rippleAmpFromVoice(voiceAmp, true))
+  return held
+}
+
 const RIPPLE_VERT = /* glsl */ `
 varying vec2 vUv;
 void main() {
@@ -634,7 +645,8 @@ export class OrdisAvatar {
       const age = this.rippleAge[i] ?? 1
       const life = Math.min(1, age / MOTION.speakRippleLife)
       const speed = this.rippleSpeed[i] ?? 1
-      const rAmp = life < 1 && this.status === 'speaking' ? rippleAmpFromVoice(amp, true) : 0
+      const held = ripples[i]?.y ?? 0
+      const rAmp = raymarchRippleAmp(life, held, this.status === 'speaking', amp)
       ripples[i]?.set(life, rAmp, speed, 0)
     }
     this.mercuryVolume.updateWorldMatrix(true, false)

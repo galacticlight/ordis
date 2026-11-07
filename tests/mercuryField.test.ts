@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { MOTION, OrdisAvatar, rippleFadeEnvelope } from '../src/renderer/src/avatar/OrdisAvatar'
+import { MOTION, OrdisAvatar, raymarchRippleAmp, rippleFadeEnvelope } from '../src/renderer/src/avatar/OrdisAvatar'
 import {
   curlNoise,
   defaultMercuryBalls,
@@ -106,5 +106,20 @@ describe('mercury render-path toggle', () => {
     expect(src).toContain("path === 'raymarch'")
     expect(src).toContain('createMercuryVolume')
     expect(src).not.toMatch(/webkitSpeechRecognition|SpeechRecognition|getUserMedia/)
+  })
+})
+
+describe('raymarch speech release', () => {
+  it('keeps a live ripple’s held amplitude when speech ends mid-life', () => {
+    const life = 0.3 / MOTION.speakRippleLife
+    expect(life).toBeCloseTo(0.285714, 5)
+    const speaking = raymarchRippleAmp(life, 0.5, true, 0.5)
+    expect(speaking).toBeCloseTo(0.659, 3)
+    expect(raymarchRippleAmp(life, speaking, false, 0.5)).toBe(speaking)
+    expect(raymarchRippleAmp(life, speaking, false, 0.5)).not.toBe(0)
+    expect(raymarchRippleAmp(1, speaking, false, 0.5)).toBe(0)
+    const src = readFileSync(join(process.cwd(), 'src/renderer/src/avatar/OrdisAvatar.ts'), 'utf8')
+    expect(src).toContain('raymarchRippleAmp(life, held, this.status === \'speaking\', amp)')
+    expect(src).not.toMatch(/life < 1 && this\.status === 'speaking' \? rippleAmpFromVoice/)
   })
 })
