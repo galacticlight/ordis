@@ -21,7 +21,7 @@ const btnSettings = must<HTMLButtonElement>('btn-settings')
 const btnTuck = must<HTMLButtonElement>('btn-tuck')
 const harborCue = must<HTMLDivElement>('harbor-cue')
 
-const scene = new OrdisAvatar(canvas)
+const scene = new OrdisAvatar(canvas, { renderPath: OrdisAvatar.resolveRenderPath() })
 let captionsEnabled = true
 let spoken = ''
 let audioCtx: AudioContext | null = null

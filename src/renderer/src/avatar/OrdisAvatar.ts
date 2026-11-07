@@ -2,6 +2,12 @@ import * as THREE from 'three'
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js'
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js'
 import type { CompanionStatus } from '../../../shared/types'
+import {
+  defaultMercuryBalls,
+  integrateMercuryBall,
+  type Vec3
+} from './mercuryField'
+import { createMercuryVolume, mercuryVolumeMaterial } from './mercuryRaymarch'
 
 export const PALETTE = {
   ivory: 0xf4ebda,
@@ -55,8 +61,24 @@ export const MOTION = {
   idleIntensity: 0.4,
   idleMicroCaustic: 0.04,
   idleMicroCausticHzA: 0.7,
-  idleMicroCausticHzB: 1.13
+  idleMicroCausticHzB: 1.13,
+  /** Raymarch spike: overdamped velocity decay (1/s). High = sluggish, not springy. */
+  mercuryViscosity: 5.6,
+  /** Weak restore toward rest; keep below viscosity so the blob does not bounce. */
+  mercuryRestore: 1.6,
+  mercuryNoiseSpeed: 0.055,
+  mercuryBounds: 0.18,
+  mercuryThreshold: 0.42,
+  mercuryRippleDisplace: 0.055,
+  mercurySteps: 56,
+  mercuryIdleSteps: 36
 } as const
+
+export type AvatarRenderPath = 'mesh' | 'raymarch'
+
+export type OrdisAvatarOptions = {
+  renderPath?: AvatarRenderPath
+}
 
 export const OVERLAY_FRUSTUM = { width: 420, height: 640 } as const
 export const SEAL_SIZE = 1
@@ -345,15 +367,27 @@ export class OrdisAvatar {
   private readonly ripples: THREE.Mesh[]
   private readonly rippleAge: number[]
   private readonly rippleSpeed: number[]
+  private readonly mercuryVolume: THREE.Mesh
+  private readonly mercuryVolumeMat: THREE.ShaderMaterial
+  private readonly mercuryBalls: Array<{ pos: Vec3; vel: Vec3; rest: Vec3; radius: number }>
+  private readonly localCam = new THREE.Vector3()
+  private readonly gpuSyncPx = new Uint8Array(4)
+  private readonly invVolume = new THREE.Matrix4()
   private status: CompanionStatus = 'idle'
   private voiceAmp = 0
   private raf = 0
   private disposed = false
+  private paused = false
   private idleSkip = 0
   /** Deterministic phase salt so speed jitter is stable per ring index. */
   private rippleSalt = 0
+  private renderPath: AvatarRenderPath = 'mesh'
 
-  constructor(canvas: HTMLCanvasElement) {
+  static resolveRenderPath(search = typeof window !== 'undefined' ? window.location.search : ''): AvatarRenderPath {
+    return new URLSearchParams(search).get('mercury') === 'raymarch' ? 'raymarch' : 'mesh'
+  }
+
+  constructor(canvas: HTMLCanvasElement, options: OrdisAvatarOptions = {}) {
     this.renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true, powerPreference: 'low-power' })
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
     this.renderer.setClearColor(0x000000, 0)
@@ -387,8 +421,33 @@ export class OrdisAvatar {
     this.rippleAge = [1, 1, 1]
     this.rippleSpeed = [1, 1, 1]
     for (const ripple of this.ripples) this.scene.add(ripple)
+    this.mercuryVolume = createMercuryVolume()
+    this.mercuryVolumeMat = mercuryVolumeMaterial(this.mercuryVolume)
+    this.seal.add(this.mercuryVolume)
+    this.mercuryBalls = defaultMercuryBalls().map((spec) => ({
+      pos: { x: spec.rest.x, y: spec.rest.y, z: spec.rest.z },
+      vel: { x: 0, y: 0, z: 0 },
+      rest: spec.rest,
+      radius: spec.radius
+    }))
     this.loop = this.loop.bind(this)
+    this.setRenderPath(options.renderPath ?? OrdisAvatar.resolveRenderPath())
     this.raf = requestAnimationFrame(this.loop)
+  }
+
+  getRenderPath(): AvatarRenderPath {
+    return this.renderPath
+  }
+
+  setRenderPath(path: AvatarRenderPath): void {
+    this.renderPath = path === 'raymarch' ? 'raymarch' : 'mesh'
+    const ray = this.renderPath === 'raymarch'
+    this.mercury.visible = !ray
+    this.glow.visible = !ray
+    this.mercuryVolume.visible = ray
+    if (ray) {
+      for (const ripple of this.ripples) ripple.visible = false
+    }
   }
 
   setStatus(status: CompanionStatus): void {
@@ -413,6 +472,26 @@ export class OrdisAvatar {
     this.renderer.dispose()
   }
 
+  sampleGpuFrames(count: number): number[] {
+    const gl = this.renderer.getContext() as WebGLRenderingContext
+    this.paused = true
+    const times: number[] = []
+    try {
+      for (let i = 0; i < count; i += 1) {
+        const dt = 1 / 60
+        const t = this.clock.elapsedTime + i * dt
+        const t0 = performance.now()
+        this.tickMotion(t, dt)
+        this.renderer.render(this.scene, this.camera)
+        gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, this.gpuSyncPx)
+        times.push(performance.now() - t0)
+      }
+    } finally {
+      this.paused = false
+    }
+    return times
+  }
+
   private startRipple(amp: number): void {
     let idx = -1
     let oldest = -1
@@ -433,7 +512,7 @@ export class OrdisAvatar {
       Math.sin(this.rippleSalt * 12.9898 + idx * 78.233) * MOTION.speakRippleSpeedJitter
     const speed = 1 + jitter
     this.rippleSpeed[idx] = speed
-    mesh.visible = true
+    mesh.visible = this.renderPath !== 'raymarch'
     mesh.position.copy(this.seal.position)
     const mat = mesh.material as THREE.ShaderMaterial
     mat.uniforms.uLife!.value = 0
@@ -444,6 +523,7 @@ export class OrdisAvatar {
   private loop(): void {
     if (this.disposed) return
     this.raf = requestAnimationFrame(this.loop)
+    if (this.paused) return
     const dt = this.clock.getDelta()
     const t = this.clock.elapsedTime
     // Idle / low-power: skip every other paint. Motion stays time-based via the clock
@@ -520,9 +600,53 @@ export class OrdisAvatar {
         const held = mat.uniforms.uAmp!.value as number
         mat.uniforms.uAmp!.value = Math.max(held, live)
       }
-      mesh.quaternion.copy(this.camera.quaternion)
-      mesh.position.copy(this.seal.position)
-      if (life >= 1) mesh.visible = false
+      if (this.renderPath === 'raymarch') {
+        mesh.visible = false
+      } else {
+        mesh.quaternion.copy(this.camera.quaternion)
+        mesh.position.copy(this.seal.position)
+        if (life >= 1) mesh.visible = false
+      }
     }
+    this.syncMercuryVolume(t, dt, pulse, idleMul, amp)
+  }
+
+  private syncMercuryVolume(t: number, dt: number, pulse: number, idleMul: number, amp: number): void {
+    const speakBoost = this.status === 'speaking' ? 1.7 : 1
+    const params = {
+      viscosity: MOTION.mercuryViscosity,
+      restore: MOTION.mercuryRestore,
+      noiseSpeed: MOTION.mercuryNoiseSpeed * idleMul * speakBoost,
+      bounds: MOTION.mercuryBounds
+    }
+    const uniforms = this.mercuryVolumeMat.uniforms
+    const balls = uniforms.uBalls!.value as THREE.Vector3[]
+    const radii = uniforms.uRadii!.value as number[]
+    for (let i = 0; i < this.mercuryBalls.length; i += 1) {
+      const ball = this.mercuryBalls[i]
+      if (!ball) continue
+      integrateMercuryBall(ball.pos, ball.vel, ball.rest, t, dt, params)
+      balls[i]?.set(ball.pos.x, ball.pos.y, ball.pos.z)
+      radii[i] = ball.radius * (this.status === 'speaking' ? 1 + amp * 0.04 : 1)
+    }
+    const ripples = uniforms.uRipples!.value as THREE.Vector4[]
+    for (let i = 0; i < 3; i += 1) {
+      const age = this.rippleAge[i] ?? 1
+      const life = Math.min(1, age / MOTION.speakRippleLife)
+      const speed = this.rippleSpeed[i] ?? 1
+      const rAmp = life < 1 && this.status === 'speaking' ? rippleAmpFromVoice(amp, true) : 0
+      ripples[i]?.set(life, rAmp, speed, 0)
+    }
+    this.mercuryVolume.updateWorldMatrix(true, false)
+    this.invVolume.copy(this.mercuryVolume.matrixWorld).invert()
+    this.localCam.copy(this.camera.position).applyMatrix4(this.invVolume)
+    ;(uniforms.uLocalCam!.value as THREE.Vector3).copy(this.localCam)
+    uniforms.uTime!.value = t
+    uniforms.uPulse!.value = pulse
+    uniforms.uIdleMul!.value = idleMul
+    uniforms.uThreshold!.value = MOTION.mercuryThreshold
+    uniforms.uNoiseAmt!.value = MOTION.idleMicroCaustic * idleMul * (this.status === 'speaking' ? 1.35 : 0.85)
+    uniforms.uRippleDisplace!.value = MOTION.mercuryRippleDisplace
+    uniforms.uSteps!.value = this.status === 'idle' ? MOTION.mercuryIdleSteps : MOTION.mercurySteps
   }
 }

@@ -6,7 +6,7 @@ import { osPlaybackCandidates, playbackArgs, resolvePlaybackBin } from '../src/m
 
 const root = process.cwd()
 const CUBE_SEAL = {
-  avatar: '47c62af4eb0a3ca864013ca8469717195deb08322b86644ccbca4b0849e3658a',
+  avatar: '0bc6c5821b5205541e0e4bf7863fa1fc2c84d0ef74ac489e7a76e140c3f1e505',
   overlayCss: 'f2517eb5554584cd955b11fa914e95f2376da1637e210bf22caf1cf15f9334fa'
 }
 
