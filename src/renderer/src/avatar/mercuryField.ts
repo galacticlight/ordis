@@ -9,6 +9,7 @@ export type Vec3 = { x: number; y: number; z: number }
 export const MERCURY_BALL_COUNT = 5
 export const MERCURY_FIELD_THRESHOLD_DEFAULT = 0.42
 export const MERCURY_RIPPLE_DISPLACE_DEFAULT = 0.055
+export const MERCURY_SMOOTH_K_DEFAULT = 0.06
 
 /** Wyvill metaball kernel: (1-(r/R)^2)^3 inside the support, else 0. */
 export function metaballKernel(r: number, radius: number): number {
@@ -38,6 +39,44 @@ export function sampleMetaballField(
 /** Approximate implicit SDF: positive outside the blob. */
 export function fieldToSdf(field: number, threshold = MERCURY_FIELD_THRESHOLD_DEFAULT): number {
   return threshold - field
+}
+
+/** IQ quadratic smooth-min; conservative for valid input SDFs (fattens the blend). */
+export function smoothMinQuadratic(a: number, b: number, k: number): number {
+  if (k <= 0) return Math.min(a, b)
+  const h = Math.max(k - Math.abs(a - b), 0) / k
+  return Math.min(a, b) - h * h * k * 0.25
+}
+
+export function sphereSdf(
+  px: number,
+  py: number,
+  pz: number,
+  cx: number,
+  cy: number,
+  cz: number,
+  radius: number
+): number {
+  return Math.hypot(px - cx, py - cy, pz - cz) - radius
+}
+
+export function sampleSmoothUnionSpheres(
+  px: number,
+  py: number,
+  pz: number,
+  balls: readonly { x: number; y: number; z: number; radius: number }[],
+  k = MERCURY_SMOOTH_K_DEFAULT
+): number {
+  if (balls.length === 0) return Number.POSITIVE_INFINITY
+  const first = balls[0]
+  if (!first) return Number.POSITIVE_INFINITY
+  let d = sphereSdf(px, py, pz, first.x, first.y, first.z, first.radius)
+  for (let i = 1; i < balls.length; i += 1) {
+    const ball = balls[i]
+    if (!ball) continue
+    d = smoothMinQuadratic(d, sphereSdf(px, py, pz, ball.x, ball.y, ball.z, ball.radius), k)
+  }
+  return d
 }
 
 /** Deterministic hash on [0, 1). */

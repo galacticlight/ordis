@@ -70,3 +70,7 @@ Before considering a merge:
 4. If Mac frame time is not comfortable, drop `mercurySteps` further while speaking/idle, or keep this as a Settings toggle rather than the default.
 
 A cheaper hybrid (keep the sphere, add vertex displacement) would not give metaball coalescence, so it is a fallback rather than a substitute.
+
+## Follow-up after QA 44ecbc3
+
+`bc4b824` keeps dying raymarch ripple amplitudes after speech ends. The next pass replaces the Wyvill density residual with quadratic smooth-union sphere SDFs, sphere-traces with that conservative distance, and evaluates value-noise plus speech ripple only at hits for shading (not inside `fieldSdf`).

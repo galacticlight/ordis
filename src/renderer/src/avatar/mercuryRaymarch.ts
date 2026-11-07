@@ -2,7 +2,7 @@
  * Raymarched implicit mercury volume. Spike path only; default avatar stays mesh.
  */
 import * as THREE from 'three'
-import { MERCURY_FIELD_THRESHOLD_DEFAULT, MERCURY_RIPPLE_DISPLACE_DEFAULT } from './mercuryField'
+import { MERCURY_FIELD_THRESHOLD_DEFAULT, MERCURY_RIPPLE_DISPLACE_DEFAULT, MERCURY_SMOOTH_K_DEFAULT } from './mercuryField'
 
 export const MERCURY_VOLUME_SIZE = 0.88
 export const MERCURY_MAX_STEPS = 72
@@ -26,6 +26,7 @@ uniform float uIdleMul;
 uniform float uThreshold;
 uniform float uNoiseAmt;
 uniform float uRippleDisplace;
+uniform float uSmoothK;
 uniform int uSteps;
 varying vec3 vLocalPos;
 
@@ -54,12 +55,9 @@ float valueNoise(vec3 x) {
   return mix(mix(nx00, nx10, f.y), mix(nx01, nx11, f.y), f.z);
 }
 
-float metaballKernel(float r, float radius) {
-  if (radius <= 0.0) return 0.0;
-  float t = r / radius;
-  if (t >= 1.0) return 0.0;
-  float u = 1.0 - t * t;
-  return u * u * u;
+float smin(float a, float b, float k) {
+  float h = max(k - abs(a - b), 0.0) / max(k, 1e-5);
+  return min(a, b) - h * h * k * 0.25;
 }
 
 float rippleDisp(float rad, float life, float amp, float speed) {
@@ -73,34 +71,38 @@ float rippleDisp(float rad, float life, float amp, float speed) {
   return band * attack * release * amp * uRippleDisplace;
 }
 
+// Conservative distance: smooth-union of sphere SDFs only. No density residual, no noise.
 float fieldSdf(vec3 p) {
-  float field = 0.0;
-  for (int i = 0; i < 5; i++) {
-    field += metaballKernel(length(p - uBalls[i]), uRadii[i]);
+  float d = length(p - uBalls[0]) - uRadii[0];
+  for (int i = 1; i < 5; i++) {
+    d = smin(d, length(p - uBalls[i]) - uRadii[i], uSmoothK);
   }
-  float n = valueNoise(p * 3.4 + vec3(uTime * 0.17, uTime * 0.11, -uTime * 0.09));
-  field += (n - 0.5) * uNoiseAmt;
-  float d = uThreshold - field;
+  return d;
+}
+
+float speechRipple(vec3 p) {
   float rad = length(p);
+  float ripple = 0.0;
   for (int i = 0; i < 3; i++) {
     float life = uRipples[i].x;
     float amp = uRipples[i].y;
     float speed = uRipples[i].z;
     if (life < 0.999 && amp > 0.001) {
-      d -= rippleDisp(rad, life, amp, speed);
+      ripple += rippleDisp(rad, life, amp, speed);
     }
   }
-  return d;
+  return ripple;
 }
 
 vec3 fieldNormal(vec3 p) {
   const float e = 0.0024;
-  vec2 h = vec2(e, 0.0);
-  return normalize(vec3(
-    fieldSdf(p + h.xyy) - fieldSdf(p - h.xyy),
-    fieldSdf(p + h.yxy) - fieldSdf(p - h.yxy),
-    fieldSdf(p + h.yyx) - fieldSdf(p - h.yyx)
-  ));
+  vec2 k = vec2(1.0, -1.0);
+  return normalize(
+    k.xyy * fieldSdf(p + k.xyy * e) +
+    k.yyx * fieldSdf(p + k.yyx * e) +
+    k.yxy * fieldSdf(p + k.yxy * e) +
+    k.xxx * fieldSdf(p + k.xxx * e)
+  );
 }
 
 bool march(vec3 ro, vec3 rd, out vec3 hitP, out float tHit) {
@@ -116,7 +118,7 @@ bool march(vec3 ro, vec3 rd, out vec3 hitP, out float tHit) {
       tHit = t;
       return true;
     }
-    t += clamp(abs(d) * 0.45, 0.006, 0.045);
+    t += max(d, 0.0015);
     if (t > maxT) break;
   }
   return false;
@@ -130,6 +132,10 @@ void main() {
   if (!march(ro, rd, p, tHit)) discard;
 
   vec3 N = fieldNormal(p);
+  float ripple = speechRipple(p);
+  float n = valueNoise(p * 3.4 + vec3(uTime * 0.17, uTime * 0.11, -uTime * 0.09));
+  vec3 radial = length(p) > 1e-4 ? normalize(p) : N;
+  N = normalize(N + radial * ripple * 10.0 + vec3(n - 0.5) * uNoiseAmt * 0.35);
   vec3 V = normalize(-rd);
   vec3 L = normalize(vec3(-0.42, 0.72, 0.58));
   vec3 H = normalize(V + L);
@@ -146,6 +152,7 @@ void main() {
   col += vec3(0.92, 0.95, 0.98) * spec * 1.85;
   col += mix(cyan, gold, 0.18) * fres * (0.22 + 0.45 * uPulse);
   col += cyan * uPulse * 0.12 * uIdleMul;
+  col += mix(cyan, gold, 0.18) * ripple * 0.55;
   gl_FragColor = vec4(col, 1.0);
 #include <colorspace_fragment>
 }
@@ -173,6 +180,7 @@ export function createMercuryVolume(): THREE.Mesh {
       uThreshold: { value: MERCURY_FIELD_THRESHOLD_DEFAULT },
       uNoiseAmt: { value: 0.04 },
       uRippleDisplace: { value: MERCURY_RIPPLE_DISPLACE_DEFAULT },
+      uSmoothK: { value: MERCURY_SMOOTH_K_DEFAULT },
       uSteps: { value: 56 }
     },
     vertexShader: VERT,

@@ -10,7 +10,9 @@ import {
   integrateMercuryBall,
   metaballKernel,
   rippleNormalDisplacement,
-  sampleMetaballField
+  sampleMetaballField,
+  sampleSmoothUnionSpheres,
+  smoothMinQuadratic
 } from '../src/renderer/src/avatar/mercuryField'
 
 describe('mercury field kernels', () => {
@@ -121,5 +123,34 @@ describe('raymarch speech release', () => {
     const src = readFileSync(join(process.cwd(), 'src/renderer/src/avatar/OrdisAvatar.ts'), 'utf8')
     expect(src).toContain('raymarchRippleAmp(life, held, this.status === \'speaking\', amp)')
     expect(src).not.toMatch(/life < 1 && this\.status === 'speaking' \? rippleAmpFromVoice/)
+  })
+})
+
+describe('conservative smooth-union spheres', () => {
+  it('smooth-min stays at or below min and rounds overlapping spheres', () => {
+    expect(smoothMinQuadratic(0.2, 0.1, 0.06)).toBeLessThanOrEqual(0.1)
+    expect(smoothMinQuadratic(0.4, 0.5, 0)).toBe(0.4)
+    const a = { x: -0.04, y: 0, z: 0, radius: 0.1 }
+    const b = { x: 0.04, y: 0, z: 0, radius: 0.1 }
+    const merged = sampleSmoothUnionSpheres(0, 0, 0, [a, b], 0.06)
+    const sharp = Math.min(
+      Math.hypot(0.04) - 0.1,
+      Math.hypot(-0.04) - 0.1
+    )
+    expect(merged).toBeLessThan(sharp)
+    expect(merged).toBeLessThan(0)
+  })
+
+  it('keeps noise and speech ripples out of the marched distance', () => {
+    const shader = readFileSync(join(process.cwd(), 'src/renderer/src/avatar/mercuryRaymarch.ts'), 'utf8')
+    const field = shader.slice(shader.indexOf('float fieldSdf'), shader.indexOf('float speechRipple'))
+    expect(field).toContain('smin')
+    expect(field).not.toContain('valueNoise')
+    expect(field).not.toContain('metaballKernel')
+    expect(field).not.toContain('rippleDisp')
+    expect(shader.indexOf('valueNoise(p')).toBeGreaterThan(shader.indexOf('if (!march'))
+    expect(shader).toContain('speechRipple(p)')
+    expect(shader).toContain('uSmoothK')
+    expect(MOTION.mercurySmoothK).toBeGreaterThan(0)
   })
 })

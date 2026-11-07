@@ -70,6 +70,7 @@ export const MOTION = {
   mercuryBounds: 0.18,
   mercuryThreshold: 0.42,
   mercuryRippleDisplace: 0.055,
+  mercurySmoothK: 0.06,
   mercurySteps: 56,
   mercuryIdleSteps: 36
 } as const
@@ -659,6 +660,7 @@ export class OrdisAvatar {
     uniforms.uThreshold!.value = MOTION.mercuryThreshold
     uniforms.uNoiseAmt!.value = MOTION.idleMicroCaustic * idleMul * (this.status === 'speaking' ? 1.35 : 0.85)
     uniforms.uRippleDisplace!.value = MOTION.mercuryRippleDisplace
+    uniforms.uSmoothK!.value = MOTION.mercurySmoothK
     uniforms.uSteps!.value = this.status === 'idle' ? MOTION.mercuryIdleSteps : MOTION.mercurySteps
   }
 }
