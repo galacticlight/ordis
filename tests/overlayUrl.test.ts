@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { overlayPageUrl } from '../src/main/overlayUrl'
+import { overlayPageUrl, resolveMercuryFlag } from '../src/main/overlayUrl'
 
 describe('overlayPageUrl', () => {
   it('uses the vite origin for the overlay and settings in dev', () => {
@@ -31,6 +31,14 @@ describe('overlayPageUrl', () => {
   it('main loads pages through overlayPageUrl', () => {
     const main = readFileSync(join(process.cwd(), 'src/main/index.ts'), 'utf8')
     expect(main).toContain('overlayPageUrl')
-    expect(main).toContain('ORDIS_MERCURY')
+    expect(main).toContain('resolveMercuryFlag')
+  })
+
+  it('reads raymarch from ORDIS_MERCURY or --mercury argv', () => {
+    expect(resolveMercuryFlag('raymarch', ['node', 'ordis'])).toBe('raymarch')
+    expect(resolveMercuryFlag(undefined, ['node', 'ordis', '--mercury=raymarch'])).toBe('raymarch')
+    expect(resolveMercuryFlag('mesh', ['node', 'ordis', '--mercury=raymarch'])).toBe('raymarch')
+    expect(resolveMercuryFlag(undefined, ['node', 'ordis', '--mercury'])).toBe('raymarch')
+    expect(resolveMercuryFlag(undefined, ['node', 'ordis'])).toBeUndefined()
   })
 })

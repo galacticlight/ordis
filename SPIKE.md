@@ -81,4 +81,6 @@ Raymarch shading now samples the same RoomEnvironment PMREM as the mesh path (`t
 
 ## Launch on a Mac
 
-`npm start` opens the usual mesh overlay. `npm run dev:mercury` (or `ORDIS_MERCURY=raymarch npm start`) appends `?mercury=raymarch` so you get the raymarched volume without editing the URL. Double-click `Launch Ordis.command` for the default mesh path.
+`npm start` opens the usual mesh overlay. `npm run dev:mercury` (or `ORDIS_MERCURY=raymarch npm start`, or `Ordis.app --args --mercury=raymarch`) appends `?mercury=raymarch`. `npm run spike` starts the Vite preview at http://127.0.0.1:5179/ and opens the browser.
+
+Double-click `Launch Ordis.command` for the mesh overlay, `Launch Ordis App.command` for a packaged darwin-arm64 `Ordis.app`, `Launch Ordis Mercury.command` for one-step raymarch, or `Launch Mercury Preview.command` for the Vite preview.

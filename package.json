@@ -11,6 +11,7 @@
     "start": "electron-vite dev",
     "dev": "electron-vite dev",
     "dev:mercury": "ORDIS_MERCURY=raymarch electron-vite dev",
+    "spike": "vite --config spike/vite.config.ts --open",
     "build": "electron-vite build",
     "preview": "electron-vite preview",
     "vendor:voice": "node scripts/vendorVoiceExtras.cjs",

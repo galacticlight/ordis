@@ -23,7 +23,7 @@ cp .env.example .env   # optional; Settings in the app is the supported key stor
 npm start              # same as npm run dev
 ```
 
-On macOS you can also double-click `Launch Ordis.command`. To open the raymarched mercury spike (on `spike/raymarched-mercury`): `npm run dev:mercury`.
+On macOS you can also double-click `Launch Ordis.command` for the overlay, `Launch Ordis App.command` for a packaged darwin-arm64 `Ordis.app` (builds it the first time), `Launch Ordis Mercury.command` for the raymarch overlay, or `Launch Mercury Preview.command` for the Vite side-by-side preview. From a terminal: `npm run dev:mercury` or `npm run spike`.
 
 The overlay appears at the bottom-right: frameless, transparent, always-on-top, idle click-through; hover the Sentinel to speak. Type to the Operator composer. Ordis is offline-first: without an API key, he still greets, speaks locally (main-process `afplay`/`aplay`/`paplay`), uses on-disk Operator memory, sets timers and reminders, and answers from YAML personality precepts.
 
@@ -112,7 +112,8 @@ tests/            vitest — traps, loyalty, precepts, memory, SSE parser, radio
 | Script | Purpose |
 |---|---|
 | `npm start` / `npm run dev` | Electron + Vite overlay |
-| `npm run dev:mercury` | Same overlay with `?mercury=raymarch` |
+| `npm run dev:mercury` | Electron overlay with `?mercury=raymarch` |
+| `npm run spike` | Vite mercury preview at 127.0.0.1:5179 and open the browser |
 | `npm test` | Unit tests |
 | `npm run lint` | ESLint |
 | `npm run typecheck` | tsc --noEmit |
