@@ -28,7 +28,28 @@ uniform float uNoiseAmt;
 uniform float uRippleDisplace;
 uniform float uSmoothK;
 uniform int uSteps;
+uniform sampler2D envMap;
+uniform float uEnvIntensity;
 varying vec3 vLocalPos;
+
+#include <cube_uv_reflection_fragment>
+
+float D_GGX(float NoH, float roughness) {
+  float a = roughness * roughness;
+  float a2 = a * a;
+  float d = (NoH * a2 - NoH) * NoH + 1.0;
+  return a2 / max(3.14159265 * d * d, 1e-7);
+}
+
+float G_SmithGGX(float NoV, float NoL, float roughness) {
+  float r = roughness + 1.0;
+  float k = (r * r) / 8.0;
+  return (NoV / max(NoV * (1.0 - k) + k, 1e-5)) * (NoL / max(NoL * (1.0 - k) + k, 1e-5));
+}
+
+vec3 F_Schlick(float cosTheta, vec3 F0) {
+  return F0 + (1.0 - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
+}
 
 float hash(vec3 p) {
   p = fract(p * 0.3183099 + vec3(0.11, 0.17, 0.23));
@@ -131,34 +152,45 @@ void main() {
   float tHit;
   if (!march(ro, rd, p, tHit)) discard;
 
-  vec3 N = fieldNormal(p);
+  vec3 Nlocal = fieldNormal(p);
   float ripple = speechRipple(p);
   float n = valueNoise(p * 3.4 + vec3(uTime * 0.17, uTime * 0.11, -uTime * 0.09));
-  vec3 radial = length(p) > 1e-4 ? normalize(p) : N;
-  N = normalize(N + radial * ripple * 10.0 + vec3(n - 0.5) * uNoiseAmt * 0.35);
-  vec3 V = normalize(-rd);
-  vec3 L = normalize(vec3(-0.42, 0.72, 0.58));
+  vec3 radial = length(p) > 1e-4 ? normalize(p) : Nlocal;
+  Nlocal = normalize(Nlocal + radial * ripple * 10.0 + vec3(n - 0.5) * uNoiseAmt * 0.35);
+
+  vec3 N = normalize(mat3(modelMatrix) * Nlocal);
+  vec3 worldP = (modelMatrix * vec4(p, 1.0)).xyz;
+  vec3 V = normalize(cameraPosition - worldP);
+  vec3 L = normalize(vec3(-2.4, 3.4, 3.2));
   vec3 H = normalize(V + L);
-  float ndl = clamp(dot(N, L) * 0.55 + 0.45, 0.0, 1.0);
-  float spec = pow(clamp(dot(N, H), 0.0, 1.0), 120.0);
-  float fres = pow(1.0 - clamp(dot(N, V), 0.0, 1.0), 3.4);
   vec3 R = reflect(-V, N);
-  vec3 env = mix(vec3(0.10, 0.09, 0.07), vec3(0.93, 0.90, 0.84), pow(clamp(R.y * 0.5 + 0.5, 0.0, 1.0), 1.15));
-  env += vec3(0.55, 0.48, 0.36) * pow(clamp(dot(R, normalize(vec3(-0.35, 0.8, 0.4))), 0.0, 1.0), 8.0);
-  vec3 base = vec3(0.62, 0.655, 0.67);
+
+  float roughness = 0.05;
+  vec3 F0 = vec3(0.604, 0.643, 0.659);
+  float NdotL = max(dot(N, L), 0.0);
+  float NdotV = max(dot(N, V), 1e-4);
+  float NdotH = max(dot(N, H), 0.0);
+  float VdotH = max(dot(V, H), 0.0);
+  vec3 spec = (D_GGX(NdotH, roughness) * G_SmithGGX(NdotV, NdotL, roughness) * F_Schlick(VdotH, F0))
+    / max(4.0 * NdotV * NdotL, 1e-4);
+  vec3 Lo = spec * vec3(1.0, 0.965, 0.910) * 0.85 * NdotL;
+  vec3 Fr = F0 + (max(vec3(1.0 - roughness), F0) - F0) * pow(clamp(1.0 - NdotV, 0.0, 1.0), 5.0);
+#ifdef ENVMAP_TYPE_CUBE_UV
+  vec3 radiance = textureCubeUV(envMap, R, roughness).rgb;
+#else
+  vec3 radiance = vec3(0.18, 0.17, 0.15);
+#endif
+  vec3 col = Lo + radiance * Fr * uEnvIntensity;
   vec3 cyan = vec3(0.494, 0.722, 0.706);
-  vec3 gold = vec3(0.769, 0.643, 0.416);
-  vec3 col = mix(base * (0.16 + 0.28 * ndl), env, 0.42 + 0.28 * fres);
-  col += vec3(0.92, 0.95, 0.98) * spec * 1.85;
-  col += mix(cyan, gold, 0.18) * fres * (0.22 + 0.45 * uPulse);
-  col += cyan * uPulse * 0.12 * uIdleMul;
-  col += mix(cyan, gold, 0.18) * ripple * 0.55;
+  col += cyan * uPulse * 0.42 * uIdleMul;
+  col += cyan * ripple * 0.55;
   gl_FragColor = vec4(col, 1.0);
+#include <tonemapping_fragment>
 #include <colorspace_fragment>
 }
 `
 
-export function createMercuryVolume(): THREE.Mesh {
+export function createMercuryVolume(envMap: THREE.Texture | null = null): THREE.Mesh {
   const balls = [
     new THREE.Vector3(0, 0, 0),
     new THREE.Vector3(0.048, 0.048, 0.048),
@@ -181,7 +213,9 @@ export function createMercuryVolume(): THREE.Mesh {
       uNoiseAmt: { value: 0.04 },
       uRippleDisplace: { value: MERCURY_RIPPLE_DISPLACE_DEFAULT },
       uSmoothK: { value: MERCURY_SMOOTH_K_DEFAULT },
-      uSteps: { value: 56 }
+      uSteps: { value: 56 },
+      envMap: { value: envMap },
+      uEnvIntensity: { value: 1.35 }
     },
     vertexShader: VERT,
     fragmentShader: FRAG,
@@ -189,6 +223,7 @@ export function createMercuryVolume(): THREE.Mesh {
     depthWrite: true,
     depthTest: true
   })
+  ;(mat as THREE.ShaderMaterial & { envMap: THREE.Texture | null }).envMap = envMap
   const mesh = new THREE.Mesh(new THREE.BoxGeometry(MERCURY_VOLUME_SIZE, MERCURY_VOLUME_SIZE, MERCURY_VOLUME_SIZE), mat)
   mesh.name = 'mercury-volume'
   mesh.visible = false

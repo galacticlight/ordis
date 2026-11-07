@@ -433,7 +433,7 @@ export class OrdisAvatar {
     this.rippleAge = [1, 1, 1]
     this.rippleSpeed = [1, 1, 1]
     for (const ripple of this.ripples) this.scene.add(ripple)
-    this.mercuryVolume = createMercuryVolume()
+    this.mercuryVolume = createMercuryVolume(envTex)
     this.mercuryVolumeMat = mercuryVolumeMaterial(this.mercuryVolume)
     this.seal.add(this.mercuryVolume)
     this.mercuryBalls = defaultMercuryBalls().map((spec) => ({

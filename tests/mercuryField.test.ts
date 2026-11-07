@@ -154,3 +154,18 @@ describe('conservative smooth-union spheres', () => {
     expect(MOTION.mercurySmoothK).toBeGreaterThan(0)
   })
 })
+
+describe('mercury IBL highlight', () => {
+  it('samples RoomEnvironment PMREM with a sharp GGX lobe after the hit', () => {
+    const shader = readFileSync(join(process.cwd(), 'src/renderer/src/avatar/mercuryRaymarch.ts'), 'utf8')
+    expect(shader).toContain('uniform sampler2D envMap')
+    expect(shader).toContain('textureCubeUV')
+    expect(shader).toContain('D_GGX')
+    expect(shader).toContain('uEnvIntensity')
+    expect(shader.indexOf('textureCubeUV')).toBeGreaterThan(shader.indexOf('if (!march'))
+    expect(shader.indexOf('D_GGX')).toBeLessThan(shader.indexOf('float fieldSdf'))
+    const field = shader.slice(shader.indexOf('float fieldSdf'), shader.indexOf('float speechRipple'))
+    expect(field).not.toContain('textureCubeUV')
+    expect(shader).toContain('#include <tonemapping_fragment>')
+  })
+})

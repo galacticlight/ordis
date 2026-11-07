@@ -74,3 +74,7 @@ A cheaper hybrid (keep the sphere, add vertex displacement) would not give metab
 ## Follow-up after QA 44ecbc3
 
 `bc4b824` keeps dying raymarch ripple amplitudes after speech ends. The next pass replaces the Wyvill density residual with quadratic smooth-union sphere SDFs, sphere-traces with that conservative distance, and evaluates value-noise plus speech ripple only at hits for shading (not inside `fieldSdf`).
+
+## Follow-up: chrome lighting
+
+Raymarch shading now samples the same RoomEnvironment PMREM as the mesh path (`textureCubeUV`) and a sharp GGX lobe (roughness 0.05, `envMapIntensity` 1.35) so the volume can read as mercury next to the mesh IBL. Ripple uniforms and the conservative `fieldSdf` are unchanged.
