@@ -8,7 +8,9 @@
   "main": "./out/main/index.js",
   "type": "module",
   "scripts": {
+    "start": "electron-vite dev",
     "dev": "electron-vite dev",
+    "dev:mercury": "ORDIS_MERCURY=raymarch electron-vite dev",
     "build": "electron-vite build",
     "preview": "electron-vite preview",
     "vendor:voice": "node scripts/vendorVoiceExtras.cjs",

@@ -19,6 +19,7 @@ import { canSpeak, consumeGreeting, createVoiceGate, unlock } from '../shared/au
 import { isHabitatRequestAllowed, overlayContentSecurityPolicy, type HabitatAllowOrigins } from '../shared/security/habitatRequest'
 import { isOverHit, isOverWindow } from '../shared/overlay/hitTest'
 import { resolvePreload } from './preloadPath'
+import { overlayPageUrl } from './overlayUrl'
 
 let overlay: BrowserWindow | null = null
 let settingsWin: BrowserWindow | null = null
@@ -110,13 +111,8 @@ function sendOverlay(channel: string, payload: unknown): void {
 }
 
 function loadPage(win: BrowserWindow, page: 'index' | 'settings'): void {
-  const dev = process.env.ELECTRON_RENDERER_URL
-  if (dev) {
-    void win.loadURL(page === 'index' ? dev : `${dev}/${page}.html`)
-    return
-  }
-  const file = join(__dirname, `../renderer/${page}.html`)
-  void win.loadURL(pathToFileURL(file).toString())
+  const file = pathToFileURL(join(__dirname, `../renderer/${page}.html`)).toString()
+  void win.loadURL(overlayPageUrl(page, process.env.ELECTRON_RENDERER_URL, file, process.env.ORDIS_MERCURY))
 }
 
 function setClickThrough(ignore: boolean): void {

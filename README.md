@@ -20,8 +20,10 @@ cd ordis
 npm install
 npm test
 cp .env.example .env   # optional; Settings in the app is the supported key store
-npm run dev
+npm start              # same as npm run dev
 ```
+
+On macOS you can also double-click `Launch Ordis.command`. To open the raymarched mercury spike (on `spike/raymarched-mercury`): `npm run dev:mercury`.
 
 The overlay appears at the bottom-right: frameless, transparent, always-on-top, idle click-through; hover the Sentinel to speak. Type to the Operator composer. Ordis is offline-first: without an API key, he still greets, speaks locally (main-process `afplay`/`aplay`/`paplay`), uses on-disk Operator memory, sets timers and reminders, and answers from YAML personality precepts.
 
@@ -109,7 +111,8 @@ tests/            vitest — traps, loyalty, precepts, memory, SSE parser, radio
 
 | Script | Purpose |
 |---|---|
-| `npm run dev` | Electron + Vite overlay |
+| `npm start` / `npm run dev` | Electron + Vite overlay |
+| `npm run dev:mercury` | Same overlay with `?mercury=raymarch` |
 | `npm test` | Unit tests |
 | `npm run lint` | ESLint |
 | `npm run typecheck` | tsc --noEmit |

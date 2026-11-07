@@ -78,3 +78,7 @@ A cheaper hybrid (keep the sphere, add vertex displacement) would not give metab
 ## Follow-up: chrome lighting
 
 Raymarch shading now samples the same RoomEnvironment PMREM as the mesh path (`textureCubeUV`) and a sharp GGX lobe (roughness 0.05, `envMapIntensity` 1.35) so the volume can read as mercury next to the mesh IBL. Ripple uniforms and the conservative `fieldSdf` are unchanged.
+
+## Launch on a Mac
+
+`npm start` opens the usual mesh overlay. `npm run dev:mercury` (or `ORDIS_MERCURY=raymarch npm start`) appends `?mercury=raymarch` so you get the raymarched volume without editing the URL. Double-click `Launch Ordis.command` for the default mesh path.
