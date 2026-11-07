@@ -77,10 +77,10 @@ A cheaper hybrid (keep the sphere, add vertex displacement) would not give metab
 
 ## Follow-up: chrome lighting
 
-Raymarch shading now samples the same RoomEnvironment PMREM as the mesh path (`textureCubeUV`) and a sharp GGX lobe (roughness 0.05, `envMapIntensity` 1.35) so the volume can read as mercury next to the mesh IBL. Ripple uniforms and the conservative `fieldSdf` are unchanged.
+Raymarch shading now samples the same RoomEnvironment PMREM as the mesh path (`textureCubeUV`) and a sharp GGX lobe (roughness 0.05, `envMapIntensity` 1.35) so the volume can read as mercury next to the mesh IBL. Ripple uniforms and the conservative `fieldSdf` are unchanged. The fragment shader declares `modelMatrix` itself (Three.js only injects that uniform in the vertex prefix); without it the volume failed to compile and the cube rendered empty. A small metal fill keeps the body visible if IBL is missing.
 
 ## Launch on a Mac
 
 `npm start` opens the usual mesh overlay. `npm run dev:mercury` (or `ORDIS_MERCURY=raymarch npm start`, or `Ordis.app --args --mercury=raymarch`) appends `?mercury=raymarch`. `npm run spike` starts the Vite preview at http://127.0.0.1:5179/ and opens the browser.
 
-Double-click `Launch Ordis.command` for the mesh overlay, `Launch Ordis App.command` for a packaged darwin-arm64 `Ordis.app`, `Launch Ordis Mercury.command` for one-step raymarch, or `Launch Mercury Preview.command` for the Vite preview.
+Double-click `Launch Ordis.command` for the mesh overlay, `Launch Ordis App.command` for a packaged darwin-arm64 `Ordis.app`, `Launch Ordis Mercury.command` for one-step raymarch, or `Launch Mercury Preview.command` for the Vite preview. `Launch Ordis Mercury.command` opens the packaged app only if it contains `resolveMercuryFlag`; otherwise it falls back to `npm run dev:mercury`. `Launch Ordis App.command` will not rebuild an existing app.

@@ -23,7 +23,7 @@ cp .env.example .env   # optional; Settings in the app is the supported key stor
 npm start              # same as npm run dev
 ```
 
-On macOS you can also double-click `Launch Ordis.command` for the overlay, `Launch Ordis App.command` for a packaged darwin-arm64 `Ordis.app` (builds it the first time), `Launch Ordis Mercury.command` for the raymarch overlay, or `Launch Mercury Preview.command` for the Vite side-by-side preview. From a terminal: `npm run dev:mercury` or `npm run spike`.
+On macOS you can also double-click `Launch Ordis.command` for the overlay, `Launch Ordis App.command` for a packaged darwin-arm64 `Ordis.app` (builds it the first time), `Launch Ordis Mercury.command` for the raymarch overlay, or `Launch Mercury Preview.command` for the Vite side-by-side preview. From a terminal: `npm run dev:mercury` or `npm run spike`. `Launch Ordis Mercury.command` opens a packaged app only when that app understands `--mercury=raymarch`; an older `Ordis.app` is skipped and it runs `npm run dev:mercury` instead. `Launch Ordis App.command` opens an existing app and does not rebuild it.
 
 The overlay appears at the bottom-right: frameless, transparent, always-on-top, idle click-through; hover the Sentinel to speak. Type to the Operator composer. Ordis is offline-first: without an API key, he still greets, speaks locally (main-process `afplay`/`aplay`/`paplay`), uses on-disk Operator memory, sets timers and reminders, and answers from YAML personality precepts.
 

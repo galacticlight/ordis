@@ -30,6 +30,7 @@ uniform float uSmoothK;
 uniform int uSteps;
 uniform sampler2D envMap;
 uniform float uEnvIntensity;
+uniform mat4 modelMatrix;
 varying vec3 vLocalPos;
 
 #include <cube_uv_reflection_fragment>
@@ -175,12 +176,13 @@ void main() {
     / max(4.0 * NdotV * NdotL, 1e-4);
   vec3 Lo = spec * vec3(1.0, 0.965, 0.910) * 0.85 * NdotL;
   vec3 Fr = F0 + (max(vec3(1.0 - roughness), F0) - F0) * pow(clamp(1.0 - NdotV, 0.0, 1.0), 5.0);
+  vec3 fill = F0 * (0.10 + 0.22 * NdotL);
 #ifdef ENVMAP_TYPE_CUBE_UV
   vec3 radiance = textureCubeUV(envMap, R, roughness).rgb;
 #else
   vec3 radiance = vec3(0.18, 0.17, 0.15);
 #endif
-  vec3 col = Lo + radiance * Fr * uEnvIntensity;
+  vec3 col = fill + Lo + radiance * Fr * uEnvIntensity;
   vec3 cyan = vec3(0.494, 0.722, 0.706);
   col += cyan * uPulse * 0.42 * uIdleMul;
   col += cyan * ripple * 0.55;

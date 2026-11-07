@@ -29,6 +29,20 @@ find_app() {
   return 1
 }
 
+# True when the packaged app includes resolveMercuryFlag (understands --mercury=raymarch).
+app_supports_mercury() {
+  local app="$1"
+  local asar="$app/Contents/Resources/app.asar"
+  local unpacked="$app/Contents/Resources/app"
+  if [[ -f "$asar" ]]; then
+    grep -aFq "resolveMercuryFlag" "$asar"
+  elif [[ -d "$unpacked" ]]; then
+    grep -RFq "resolveMercuryFlag" "$unpacked"
+  else
+    return 1
+  fi
+}
+
 ensure_app() {
   local app
   if app="$(find_app)"; then
@@ -68,11 +82,15 @@ case "$MODE" in
     open -n "$APP_PATH"
     ;;
   mercury)
-    if APP_PATH="$(find_app)"; then
+    if APP_PATH="$(find_app)" && app_supports_mercury "$APP_PATH"; then
       echo "Opening $APP_PATH with --mercury=raymarch"
       open -n "$APP_PATH" --args --mercury=raymarch
     else
-      echo "No packaged Ordis.app yet — launching the Electron overlay with raymarch."
+      if [[ -n "${APP_PATH:-}" ]]; then
+        echo "Packaged Ordis.app does not understand --mercury=raymarch — launching the Electron overlay with raymarch."
+      else
+        echo "No packaged Ordis.app yet — launching the Electron overlay with raymarch."
+      fi
       need_npm
       npm run dev:mercury
     fi

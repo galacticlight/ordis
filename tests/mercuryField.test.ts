@@ -159,6 +159,7 @@ describe('mercury IBL highlight', () => {
   it('samples RoomEnvironment PMREM with a sharp GGX lobe after the hit', () => {
     const shader = readFileSync(join(process.cwd(), 'src/renderer/src/avatar/mercuryRaymarch.ts'), 'utf8')
     expect(shader).toContain('uniform sampler2D envMap')
+    expect(shader).toContain('uniform mat4 modelMatrix')
     expect(shader).toContain('textureCubeUV')
     expect(shader).toContain('D_GGX')
     expect(shader).toContain('uEnvIntensity')
