@@ -40,7 +40,7 @@ Voice input, personality, memory, habitat tasks, and the TTS pipeline were not t
 
 ## Benchmarks
 
-Captured 2026-11-06 5:08 PM PT on the Linux box, HeadlessChrome, WebGL via **ANGLE SwiftShader (Subzero)** — software rasterizer, not the Operator’s Mac GPU. Each sample is 72 frames of `tickMotion` + `render` + `readPixels` (1×1) to flush the GPU. Raw data: `spike/out/bench.json`.
+Captured 2026-11-06 5:08 PM PT on the Linux box, HeadlessChrome, WebGL via **ANGLE SwiftShader (Subzero)** — software rasterizer, not the Operator’s Mac GPU. Each sample is 72 frames of `tickMotion` + `render` + `readPixels` (1×1) to flush the GPU. Raw data: `spike/captures/bench.json`.
 
 | Status   | Mesh median | Raymarch median | Ratio | Mesh p95 | Raymarch p95 |
 |----------|-------------|-----------------|-------|----------|--------------|
@@ -51,7 +51,7 @@ Absolute milliseconds will be much lower on Apple Silicon. The useful figure is 
 
 ## Visual notes
 
-Stills: `spike/out/idle.png`, `spike/out/speak.png`.
+Stills: `spike/captures/idle.png`, `spike/captures/speak.png`.
 
 - Cube identity holds: glass, gold cage, and rings frame both cores.
 - Mesh mercury stays a perfect sphere. Speaking lifts its cyan emissive; overlay rings are easy to miss in a still.

@@ -1,0 +1,42 @@
+{
+  "capturedAt": "2026-11-07T01:08:34.671Z",
+  "frames": 72,
+  "idle": {
+    "mode": "idle",
+    "frames": 72,
+    "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/156.0.0.0 Safari/537.36",
+    "webglVendor": "Google Inc. (Google)",
+    "webglRenderer": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)",
+    "mesh": {
+      "median": 56.69999998807907,
+      "mean": 57.913888888640535,
+      "p95": 63.5,
+      "n": 72
+    },
+    "raymarch": {
+      "median": 132.90000000596046,
+      "mean": 136.70000000008278,
+      "p95": 158.09999999403954,
+      "n": 72
+    }
+  },
+  "speak": {
+    "mode": "speaking",
+    "frames": 72,
+    "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/156.0.0.0 Safari/537.36",
+    "webglVendor": "Google Inc. (Google)",
+    "webglRenderer": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)",
+    "mesh": {
+      "median": 56.1000000089407,
+      "mean": 58.02777777757082,
+      "p95": 59.79999999701977,
+      "n": 72
+    },
+    "raymarch": {
+      "median": 149.20000000298023,
+      "mean": 147.80000000033112,
+      "p95": 171.70000000298023,
+      "n": 72
+    }
+  }
+}
